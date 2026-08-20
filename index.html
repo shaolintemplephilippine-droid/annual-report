@@ -194,19 +194,21 @@
           <button class="btn btn-sm btn-outline" onclick="addCatModal('income')">+ 收入项目</button>
         </div>
       </h2>
-      <p style="font-size:13px;color:#64748b;margin-bottom:16px">直接在表格中修改金额，数据自动保存。空白格表示该月无此项收支。</p>
+      <p style="font-size:13px;color:#64748b;margin-bottom:16px">直接在表格中修改金额，数据自动保存在本机；如需让其他设备看到，请点击下方「☁️ 保存到云端」。</p>
       <div style="overflow-x:auto"><table class="edit-table" id="editTable"></table></div>
     </div>
 
     <div class="card">
       <h2><span class="h2-left">⚙️ 数据管理</span></h2>
-      <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-success" onclick="saveToCloud()">☁️ 保存到云端（同步所有设备）</button>
         <button class="btn btn-outline" onclick="exportData()">📥 导出数据</button>
         <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">📤 导入数据</button>
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
         <button class="btn btn-outline" onclick="resetData()">🔄 恢复初始数据</button>
         <button class="btn btn-danger" onclick="clearAllData()">🗑️ 清空所有数据</button>
       </div>
+      <p style="font-size:12px;color:#94a3b8;margin-top:12px">💡 在表格里修改的数据只保存在本机浏览器；点「保存到云端」后，约 1 分钟内所有设备打开链接都能看到最新数据。页面每次打开也会自动拉取云端最新版本。</p>
     </div>
 
   </div>
@@ -216,23 +218,31 @@
 <script>
 // ===================== Data Model =====================
 const DB_KEY = 'annual_report_db_v1';
+const GH_REPO = 'shaolintemplephilippine-droid/annual-report';
+const GH_BRANCH = 'main';
+const GH_RAW_URL = 'https://raw.githubusercontent.com/' + GH_REPO + '/' + GH_BRANCH + '/index.html';
+const GH_TOKEN_KEY = 'annual_report_gh_token_v1';
+const LAST_SYNC_KEY = 'annual_report_last_sync_v1';
 const DEFAULT_EXPENSE_CATS = ['水费', '电费', '网费', '团体工资', '房租', '保姆工资', '保安工资'];
 const DEFAULT_INCOME_CATS = ['功德箱', '武术学费'];
 
 function defaultData() {
+/* DATA_START */
   return {
-    year: 2026,
-    expenseCats: [...DEFAULT_EXPENSE_CATS],
-    incomeCats: [...DEFAULT_INCOME_CATS],
-    months: [
-      { label:'1月', expenses:{'水费':15409.11,'电费':29069.61,'网费':1899,'团体工资':330000,'房租':250000,'保姆工资':14500,'保安工资':33000}, income:{'功德箱':46230,'武术学费':348500} },
-      { label:'2月', expenses:{'水费':17646,'电费':25976,'网费':1899,'团体工资':330000,'房租':250000,'保姆工资':15000,'保安工资':32000}, income:{'功德箱':40000,'武术学费':53000} },
-      { label:'3月', expenses:{'水费':0,'电费':31541.76,'网费':1899,'团体工资':330000,'房租':250000,'保姆工资':15000,'保安工资':30000}, income:{'功德箱':72300,'武术学费':152000} },
-      { label:'4月', expenses:{'水费':6000,'电费':42742,'网费':1899,'团体工资':400000,'房租':250000,'保姆工资':15000,'保安工资':33000}, income:{'功德箱':65820,'武术学费':183500} },
-      { label:'5月', expenses:{'水费':8000,'电费':60493,'网费':1899,'团体工资':400000,'房租':250000,'保姆工资':10500,'保安工资':33393.33}, income:{'功德箱':61400,'武术学费':314800} },
-      { label:'6月', expenses:{'水费':6000,'电费':57798.26,'网费':1899,'团体工资':400000,'房租':250000,'保姆工资':15000,'保安工资':33000}, income:{'功德箱':58200,'武术学费':348525} },
+    "year": 2026,
+    "updatedAt": 1787222641000,
+    "expenseCats": ["水费", "电费", "网费", "团体工资", "房租", "保姆工资", "保安工资"],
+    "incomeCats": ["功德箱", "武术学费"],
+    "months": [
+      {"label": "1月", "expenses": {"水费": 15409.11, "电费": 29069.61, "网费": 1899, "团体工资": 330000, "房租": 250000, "保姆工资": 14500, "保安工资": 33000}, "income": {"功德箱": 46230, "武术学费": 348500}},
+      {"label": "2月", "expenses": {"水费": 17646, "电费": 25976, "网费": 1899, "团体工资": 330000, "房租": 250000, "保姆工资": 15000, "保安工资": 32000}, "income": {"功德箱": 40000, "武术学费": 53000}},
+      {"label": "3月", "expenses": {"水费": 0, "电费": 31541.76, "网费": 1899, "团体工资": 330000, "房租": 250000, "保姆工资": 15000, "保安工资": 30000}, "income": {"功德箱": 72300, "武术学费": 152000}},
+      {"label": "4月", "expenses": {"水费": 6000, "电费": 42742, "网费": 1899, "团体工资": 400000, "房租": 250000, "保姆工资": 15000, "保安工资": 33000}, "income": {"功德箱": 65820, "武术学费": 183500}},
+      {"label": "5月", "expenses": {"水费": 8000, "电费": 60493, "网费": 1899, "团体工资": 400000, "房租": 250000, "保姆工资": 10500, "保安工资": 33393.33}, "income": {"功德箱": 61400, "武术学费": 314800}},
+      {"label": "6月", "expenses": {"水费": 6000, "电费": 57798.26, "网费": 1899, "团体工资": 400000, "房租": 250000, "保姆工资": 15000, "保安工资": 33000}, "income": {"功德箱": 58200, "武术学费": 348525}}
     ]
   };
+/* DATA_END */
 }
 
 function loadData() {
@@ -242,7 +252,8 @@ function loadData() {
   } catch(e) {}
   return defaultData();
 }
-function saveData() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+function persistDb() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+function saveData() { db.updatedAt = Date.now(); persistDb(); }
 
 let db = loadData();
 let charts = {};
@@ -779,6 +790,112 @@ function clearAllData() {
   showToast('所有数据已清空');
 }
 
+// ===================== Cloud Sync (GitHub) =====================
+function b64encodeUtf8(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function b64decodeUtf8(b64) {
+  const bin = atob(b64.replace(/\s/g, ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function fmtTime(t) { return new Date(t).toLocaleString('zh-CN'); }
+
+function tokenModal() {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); resolve(null); } });
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <h3>🔑 设置 GitHub 令牌</h3>
+      <p style="font-size:12px;color:#64748b;margin-bottom:12px;line-height:1.6">每台设备只需设置一次。令牌仅用于把这份报表的数据写回 GitHub 仓库，不会发送到任何其他地方。</p>
+      <div class="form-group"><label>令牌（github_pat_ 开头的一长串字符）</label><input id="gh_token_input" type="password" placeholder="粘贴 Fine-grained Token" autofocus></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" id="gh_token_cancel">取消</button>
+        <button class="btn btn-primary" id="gh_token_ok">确定</button>
+      </div>`;
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    const input = modal.querySelector('#gh_token_input');
+    setTimeout(() => input.focus(), 50);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { overlay.remove(); resolve(input.value.trim()); } });
+    modal.querySelector('#gh_token_cancel').onclick = () => { overlay.remove(); resolve(null); };
+    modal.querySelector('#gh_token_ok').onclick = () => { overlay.remove(); resolve(input.value.trim()); };
+  });
+}
+
+async function getGHToken() {
+  let token = localStorage.getItem(GH_TOKEN_KEY);
+  if (token) return token;
+  token = await tokenModal();
+  if (token) localStorage.setItem(GH_TOKEN_KEY, token);
+  return token;
+}
+
+async function saveToCloud() {
+  const token = await getGHToken();
+  if (!token) { showToast('未设置令牌，已取消保存'); return; }
+  showToast('正在保存到云端…');
+  try {
+    const apiUrl = 'https://api.github.com/repos/' + GH_REPO + '/contents/index.html';
+    const headers = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+    const res = await fetch(apiUrl, { headers: headers });
+    if (res.status === 401 || res.status === 403) { localStorage.removeItem(GH_TOKEN_KEY); showToast('令牌无效或已过期，请重新设置'); return; }
+    if (!res.ok) { showToast('读取云端文件失败（' + res.status + '）'); return; }
+    const info = await res.json();
+    const html = b64decodeUtf8(info.content);
+    const dataBlock = /\/\* DATA_START \*\/[\s\S]*?\/\* DATA_END \*\//;
+    if (!dataBlock.test(html)) { showToast('云端文件格式异常，已取消'); return; }
+    saveData();
+    const block = '/* DATA_START */\n  return ' + JSON.stringify(db, null, 2) + ';\n  /* DATA_END */';
+    const newHtml = html.replace(dataBlock, block);
+    const put = await fetch(apiUrl, {
+      method: 'PUT',
+      headers: headers,
+      body: JSON.stringify({ message: '网页端更新数据 ' + fmtTime(db.updatedAt), content: b64encodeUtf8(newHtml), sha: info.sha, branch: GH_BRANCH })
+    });
+    if (put.status === 401 || put.status === 403) { localStorage.removeItem(GH_TOKEN_KEY); showToast('令牌无效或权限不足（需要 Contents 读写权限）'); return; }
+    if (!put.ok) { const err = await put.json().catch(() => ({})); showToast('保存失败：' + (err.message || put.status)); return; }
+    localStorage.setItem(LAST_SYNC_KEY, String(db.updatedAt));
+    showToast('✅ 已保存到云端，约 1 分钟后所有设备可见');
+  } catch (e) {
+    showToast('网络错误，保存失败，请稍后重试');
+  }
+}
+
+async function syncFromCloud() {
+  try {
+    const res = await fetch(GH_RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const html = await res.text();
+    const m = html.match(/\/\* DATA_START \*\/([\s\S]*?)\/\* DATA_END \*\//);
+    if (!m) return;
+    const jsonStr = m[1].trim().replace(/^return\s+/, '').replace(/;\s*$/, '');
+    const remote = JSON.parse(jsonStr);
+    const remoteTime = remote.updatedAt || 0;
+    const localTime = db.updatedAt || 0;
+    const lastSync = Number(localStorage.getItem(LAST_SYNC_KEY) || 0);
+    if (remoteTime > localTime) {
+      if (localTime > lastSync) {
+        const useRemote = confirm('云端有更新的数据（' + fmtTime(remoteTime) + ' 保存）。\n本机也有尚未同步到云端的修改（' + fmtTime(localTime) + '）。\n\n【确定】使用云端版本（放弃本机修改）\n【取消】保留本机修改（之后可点「保存到云端」覆盖云端）');
+        if (!useRemote) return;
+      }
+      db = remote;
+      persistDb();
+      localStorage.setItem(LAST_SYNC_KEY, String(remoteTime));
+      renderReport();
+      renderEditTable();
+      showToast('已自动同步云端最新数据');
+    }
+  } catch (e) { /* 离线或网络问题：使用本地数据 */ }
+}
+
 // ===================== Toast =====================
 function showToast(msg) {
   const existing = document.querySelector('.toast');
@@ -792,6 +909,7 @@ function showToast(msg) {
 
 // ===================== Init =====================
 renderReport();
+syncFromCloud();
 </script>
 </body>
 </html>
