@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>年度月度收支总览 · 管理层报告</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f1f5f9; color: #0f172a; line-height: 1.6; padding: 32px 24px; }
+  .report { max-width: 1280px; margin: 0 auto; }
+
+  /* Report header */
+  .report-header { background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); color: #fff; padding: 32px 40px; border-radius: 16px; margin-bottom: 24px; box-shadow: 0 10px 30px rgba(30, 64, 175, 0.2); }
+  .report-header h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  .report-header .subtitle { opacity: 0.85; font-size: 14px; }
+  .report-header .meta { display: flex; gap: 32px; margin-top: 16px; font-size: 13px; opacity: 0.9; flex-wrap: wrap; }
+  .report-header .meta-item span { font-weight: 700; }
+
+  /* Actions bar */
+  .actions { display: flex; gap: 12px; justify-content: flex-end; margin-bottom: 20px; flex-wrap: wrap; }
+  .btn { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; transition: all 0.2s; }
+  .btn-primary { background: #1e40af; color: #fff; }
+  .btn-primary:hover { background: #1e3a8a; }
+  .btn-outline { background: #fff; color: #1e40af; border: 1px solid #1e40af; }
+  .btn-outline:hover { background: #eff6ff; }
+  .btn-success { background: #16a34a; color: #fff; }
+  .btn-success:hover { background: #15803d; }
+  .btn-danger { background: #fee2e2; color: #dc2626; }
+  .btn-danger:hover { background: #fecaca; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: 6px; }
+
+  /* KPI cards */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .kpi-card { background: #fff; border-radius: 12px; padding: 20px 22px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 4px solid #2563eb; }
+  .kpi-card.danger { border-left-color: #dc2626; }
+  .kpi-card.success { border-left-color: #16a34a; }
+  .kpi-card.warning { border-left-color: #f59e0b; }
+  .kpi-label { font-size: 13px; color: #64748b; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 700; color: #0f172a; }
+  .kpi-card.danger .kpi-value { color: #dc2626; }
+  .kpi-card.success .kpi-value { color: #16a34a; }
+  .kpi-card.warning .kpi-value { color: #f59e0b; }
+  .kpi-sub { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+
+  /* Cards */
+  .card { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 20px; }
+  .card h2 { font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
+  .card h2 .h2-left { display: flex; align-items: center; gap: 8px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .chart-box { position: relative; height: 320px; }
+  .chart-box.tall { height: 380px; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px 12px; text-align: right; border-bottom: 1px solid #e2e8f0; }
+  th:first-child, td:first-child { text-align: left; }
+  th { background: #f8fafc; font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  tr.section-row td { background: #eff6ff; font-weight: 700; color: #1e40af; text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+  tr.row-out td:first-child { color: #64748b; }
+  tr.row-in td:first-child { color: #16a34a; }
+  tr.row-total td { font-weight: 700; background: #f8fafc; border-top: 2px solid #cbd5e1; }
+  tr.row-loss td { font-weight: 700; background: #fef2f2; color: #dc2626; }
+
+  /* Findings */
+  .findings { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; padding: 20px 24px; border-left: 4px solid #f59e0b; margin-bottom: 20px; }
+  .findings h3 { color: #92400e; font-size: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .findings ul { margin-left: 20px; color: #78350f; }
+  .findings li { margin-bottom: 6px; font-size: 14px; }
+  .findings strong { color: #92400e; }
+
+  /* Edit mode */
+  .edit-panel { display: none; }
+  .edit-panel.active { display: block; }
+  .report-panel { display: block; }
+  .report-panel.hidden { display: none; }
+
+  /* Editable table */
+  .edit-table input { width: 100%; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 13px; text-align: right; font-family: inherit; }
+  .edit-table input:focus { outline: none; border-color: #1e40af; box-shadow: 0 0 0 2px rgba(30,64,175,0.1); }
+  .edit-table input[type="text"] { text-align: left; }
+  .edit-table .cat-name { font-weight: 600; padding: 6px 8px; }
+  .edit-table .row-cat td { background: #f8fafc; }
+  .edit-table .col-total { background: #eff6ff; font-weight: 700; }
+  .edit-table .col-month-header { min-width: 90px; }
+  .edit-table .icon-btn { cursor: pointer; border: none; background: none; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
+  .edit-table .icon-btn:hover { background: #fee2e2; }
+
+  /* Modal */
+  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .modal { background: #fff; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+  .modal h3 { font-size: 18px; margin-bottom: 16px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  .form-group { margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 13px; color: #64748b; margin-bottom: 4px; }
+  .form-group input, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; font-family: inherit; }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: #1e40af; box-shadow: 0 0 0 2px rgba(30,64,175,0.1); }
+  .form-row { display: flex; gap: 12px; }
+  .form-row .form-group { flex: 1; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b; color: #fff; padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 9999; animation: fadeIn 0.3s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Tabs */
+  .mode-tabs { display: flex; gap: 0; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 20px; }
+  .mode-tab { padding: 12px 28px; cursor: pointer; font-size: 14px; font-weight: 600; color: #64748b; border: none; background: none; transition: all 0.2s; border-bottom: 3px solid transparent; }
+  .mode-tab.active { color: #1e40af; border-bottom-color: #1e40af; background: #eff6ff; }
+  .mode-tab:hover:not(.active) { background: #f8fafc; }
+
+  @media print {
+    body { background: #fff; padding: 0; }
+    .actions, .mode-tabs, .edit-panel { display: none !important; }
+    .report-panel { display: block !important; }
+    .card { box-shadow: none; border: 1px solid #e2e8f0; page-break-inside: avoid; }
+    .report-header { box-shadow: none; }
+    .kpi-card { box-shadow: none; }
+  }
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .grid-2 { grid-template-columns: 1fr; }
+    .form-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="report">
+
+  <!-- Top actions -->
+  <div class="actions">
+    <a href="index.html" class="btn btn-outline">← 返回工作台</a>
+    <button onclick="window.print()" class="btn btn-primary">🖨 打印报告</button>
+  </div>
+
+  <!-- Mode tabs -->
+  <div class="mode-tabs">
+    <button class="mode-tab active" onclick="switchMode('report')">📊 报告视图</button>
+    <button class="mode-tab" onclick="switchMode('edit')">✏️ 数据录入</button>
+  </div>
+
+  <!-- ============ Report Panel ============ -->
+  <div class="report-panel" id="reportPanel">
+
+    <div class="report-header">
+      <h1>📊 年度月度收支总览</h1>
+      <div class="subtitle">Income & Expense Overview · 综合财务分析</div>
+      <div class="meta">
+        <div class="meta-item">报告期间：<span id="rpPeriod"></span></div>
+        <div class="meta-item">生成日期：<span id="reportDate"></span></div>
+        <div class="meta-item">货币单位：<span>₱ PHP（菲律宾比索）</span></div>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <div class="card">
+      <h2><span class="h2-left">📈 月度收支趋势</span></h2>
+      <div class="chart-box tall"><canvas id="trendChart"></canvas></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2><span class="h2-left">💸 支出构成</span></h2>
+        <div class="chart-box"><canvas id="expensePie"></canvas></div>
+      </div>
+      <div class="card">
+        <h2><span class="h2-left">💰 收入构成</span></h2>
+        <div class="chart-box"><canvas id="incomePie"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="h2-left">📉 各月盈亏对比</span></h2>
+      <div class="chart-box"><canvas id="lossChart"></canvas></div>
+    </div>
+
+    <div class="findings" id="findingsBox"></div>
+
+    <div class="card">
+      <h2><span class="h2-left">📋 月度收支明细表</span></h2>
+      <div style="overflow-x:auto"><table id="detailTable"></table></div>
+    </div>
+
+  </div>
+
+  <!-- ============ Edit Panel ============ -->
+  <div class="edit-panel" id="editPanel">
+
+    <div class="card">
+      <h2>
+        <span class="h2-left">✏️ 收支数据录入</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-outline" onclick="addMonthModal()">+ 添加月份</button>
+          <button class="btn btn-sm btn-outline" onclick="addCatModal('expense')">+ 支出项目</button>
+          <button class="btn btn-sm btn-outline" onclick="addCatModal('income')">+ 收入项目</button>
+        </div>
+      </h2>
+      <p style="font-size:13px;color:#64748b;margin-bottom:16px">直接在表格中修改金额，数据自动保存。空白格表示该月无此项收支。</p>
+      <div style="overflow-x:auto"><table class="edit-table" id="editTable"></table></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="h2-left">⚙️ 数据管理</span></h2>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button class="btn btn-outline" onclick="exportData()">📥 导出数据</button>
+        <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">📤 导入数据</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+        <button class="btn btn-outline" onclick="resetData()">🔄 恢复初始数据</button>
+        <button class="btn btn-danger" onclick="clearAllData()">🗑️ 清空所有数据</button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+// ===================== Data Model =====================
+const DB_KEY = 'annual_report_db_v1';
+const DEFAULT_EXPENSE_CATS = ['水费', '电费', '网费', '团体工资', '房租', '保姆工资', '保安工资'];
+const DEFAULT_INCOME_CATS = ['功德箱', '武术学费'];
+
+function defaultData() {
+  return {
+    year: 2026,
+    expenseCats: [...DEFAULT_EXPENSE_CATS],
+    incomeCats: [...DEFAULT_INCOME_CATS],
+    months: [
+      { label:'1月', expenses:{'水费':15409.11,'电费':29069.61,'网费':1899,'团体工资':330000,'房租':250000,'保姆工资':14500,'保安工资':33000}, income:{'功德箱':46230,'武术学费':348500} },
+      { label:'2月', expenses:{'水费':17646,'电费':25976,'网费':1899,'团体工资':330000,'房租':250000,'保姆工资':15000,'保安工资':32000}, income:{'功德箱':40000,'武术学费':53000} },
+      { label:'3月', expenses:{'水费':0,'电费':31541.76,'网费':1899,'团体工资':330000,'房租':250000,'保姆工资':15000,'保安工资':30000}, income:{'功德箱':72300,'武术学费':152000} },
+      { label:'4月', expenses:{'水费':6000,'电费':42742,'网费':1899,'团体工资':400000,'房租':250000,'保姆工资':15000,'保安工资':33000}, income:{'功德箱':65820,'武术学费':183500} },
+      { label:'5月', expenses:{'水费':8000,'电费':60493,'网费':1899,'团体工资':400000,'房租':250000,'保姆工资':10500,'保安工资':33393.33}, income:{'功德箱':61400,'武术学费':314800} },
+      { label:'6月', expenses:{'水费':6000,'电费':57798.26,'网费':1899,'团体工资':400000,'房租':250000,'保姆工资':15000,'保安工资':33000}, income:{'功德箱':58200,'武术学费':348525} },
+    ]
+  };
+}
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(DB_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return defaultData();
+}
+function saveData() { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+
+let db = loadData();
+let charts = {};
+
+// ===================== Utils =====================
+function fmt(n) {
+  const v = Number(n) || 0;
+  if (v === 0) return '<span style="color:#cbd5e1">—</span>';
+  return '₱' + v.toLocaleString('en-PH', {maximumFractionDigits: 0});
+}
+function fmtFull(n) {
+  const v = Number(n) || 0;
+  return '₱' + v.toLocaleString('en-PH', {maximumFractionDigits: 0});
+}
+function fmtSigned(n) {
+  const v = Number(n) || 0;
+  const sign = v < 0 ? '-' : '';
+  return sign + '₱' + Math.abs(v).toLocaleString('en-PH', {maximumFractionDigits: 0});
+}
+function getMonthExpense(m) { return Object.values(m.expenses || {}).reduce((a,b)=>a+(Number(b)||0), 0); }
+function getMonthIncome(m) { return Object.values(m.income || {}).reduce((a,b)=>a+(Number(b)||0), 0); }
+function getCatTotal(cat, type) {
+  return db.months.reduce((sum, m) => {
+    const val = type === 'expense' ? (m.expenses && m.expenses[cat]) : (m.income && m.income[cat]);
+    return sum + (Number(val) || 0);
+  }, 0);
+}
+
+// ===================== Mode Switching =====================
+function switchMode(mode) {
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  if (mode === 'report') {
+    document.getElementById('reportPanel').classList.remove('hidden');
+    document.getElementById('editPanel').classList.remove('active');
+    renderReport();
+  } else {
+    document.getElementById('reportPanel').classList.add('hidden');
+    document.getElementById('editPanel').classList.add('active');
+    renderEditTable();
+  }
+}
+
+// ===================== Report Rendering =====================
+function renderReport() {
+  const months = db.months;
+  if (months.length === 0) {
+    document.getElementById('reportPanel').innerHTML = '<div class="card" style="text-align:center;padding:60px"><p style="font-size:18px;color:#94a3b8">暂无数据，请先在「数据录入」中添加月份数据</p></div>';
+    return;
+  }
+
+  const totalIncome = months.reduce((a,m) => a + getMonthIncome(m), 0);
+  const totalExpense = months.reduce((a,m) => a + getMonthExpense(m), 0);
+  const totalProfit = totalIncome - totalExpense;
+  const ratio = totalExpense > 0 ? (totalIncome / totalExpense * 100) : 0;
+  const monthCount = months.length;
+  const avgIncome = totalIncome / monthCount;
+  const avgExpense = totalExpense / monthCount;
+
+  // Header meta
+  document.getElementById('rpPeriod').textContent = `${db.year}年 ${months[0].label} — ${months[months.length-1].label}`;
+  document.getElementById('reportDate').textContent = new Date().toLocaleDateString('zh-CN', {year:'numeric', month:'long', day:'numeric'});
+
+  // KPI cards
+  const profitColor = totalProfit < 0 ? 'danger' : 'success';
+  const profitLabel = totalProfit < 0 ? '累计总亏损' : '累计盈余';
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card ${profitColor}">
+      <div class="kpi-label">${totalProfit < 0 ? '📉' : '📈'} ${profitLabel}</div>
+      <div class="kpi-value">${fmtSigned(totalProfit)}</div>
+      <div class="kpi-sub">${monthCount} 个月总和</div>
+    </div>
+    <div class="kpi-card success">
+      <div class="kpi-label">💰 总收入</div>
+      <div class="kpi-value">${fmtFull(totalIncome)}</div>
+      <div class="kpi-sub">月均 ${fmtFull(avgIncome)}</div>
+    </div>
+    <div class="kpi-card danger">
+      <div class="kpi-label">💸 总支出</div>
+      <div class="kpi-value">${fmtFull(totalExpense)}</div>
+      <div class="kpi-sub">月均 ${fmtFull(avgExpense)}</div>
+    </div>
+    <div class="kpi-card warning">
+      <div class="kpi-label">📊 收支比</div>
+      <div class="kpi-value">${ratio.toFixed(1)}%</div>
+      <div class="kpi-sub">${ratio < 50 ? '收入仅覆盖支出约' + Math.round(ratio/10)*10 + '%' : ratio < 100 ? '接近收支平衡' : '收支盈余'}</div>
+    </div>`;
+
+  // Destroy old charts
+  Object.values(charts).forEach(c => c && c.destroy());
+  charts = {};
+
+  const labels = months.map(m => m.label);
+  const incomeArr = months.map(m => getMonthIncome(m));
+  const expenseArr = months.map(m => getMonthExpense(m));
+  const profitArr = incomeArr.map((v,i) => v - expenseArr[i]);
+
+  // Trend chart
+  charts.trend = new Chart(document.getElementById('trendChart'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label:'总收入', data:incomeArr, backgroundColor:'#22c55e', borderRadius:6, barPercentage:0.7 },
+      { label:'总支出', data:expenseArr, backgroundColor:'#ef4444', borderRadius:6, barPercentage:0.7 },
+      { type:'line', label:'盈亏', data:profitArr, borderColor:'#1e40af', backgroundColor:'rgba(30,64,175,0.1)', borderWidth:3, pointRadius:6, pointBackgroundColor:'#1e40af', tension:0.3, yAxisID:'y1' }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'bottom',labels:{padding:16,font:{size:13}}}, tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${fmtFull(c.parsed.y)}`}} },
+      scales:{ y:{beginAtZero:true,ticks:{callback:v=>'₱'+(v/1000).toFixed(0)+'k'},grid:{color:'#f1f5f9'}}, y1:{beginAtZero:true,position:'right',ticks:{callback:v=>'₱'+(v/1000).toFixed(0)+'k'},grid:{display:false}} }
+    }
+  });
+
+  // Expense pie
+  const expLabels = db.expenseCats.filter(c => getCatTotal(c,'expense') > 0);
+  const expData = expLabels.map(c => getCatTotal(c,'expense'));
+  charts.expensePie = new Chart(document.getElementById('expensePie'), {
+    type:'doughnut',
+    data:{ labels:expLabels, datasets:[{ data:expData, backgroundColor:['#1e40af','#3b82f6','#60a5fa','#93c5fd','#fbbf24','#fb923c','#94a3b8','#a78bfa','#34d399'], borderWidth:2, borderColor:'#fff' }]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'right',labels:{font:{size:12},padding:10}}, tooltip:{callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);return ` ${c.label}: ${fmtFull(c.parsed)} (${(c.parsed/t*100).toFixed(1)}%)`;}}} } }
+  });
+
+  // Income pie
+  const incLabels = db.incomeCats.filter(c => getCatTotal(c,'income') > 0);
+  const incData = incLabels.map(c => getCatTotal(c,'income'));
+  charts.incomePie = new Chart(document.getElementById('incomePie'), {
+    type:'doughnut',
+    data:{ labels:incLabels, datasets:[{ data:incData, backgroundColor:['#16a34a','#86efac','#22c55e','#4ade80','#bbf7d0'], borderWidth:2, borderColor:'#fff' }]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'bottom',labels:{font:{size:13},padding:12}}, tooltip:{callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);return ` ${c.label}: ${fmtFull(c.parsed)} (${(c.parsed/t*100).toFixed(1)}%)`;}}} } }
+  });
+
+  // Loss chart
+  charts.loss = new Chart(document.getElementById('lossChart'), {
+    type:'bar',
+    data:{ labels, datasets:[{ label:'月盈亏', data:profitArr, backgroundColor:profitArr.map(v=>v<0?(v<-500000?'#991b1b':v<-400000?'#dc2626':v<-300000?'#f59e0b':'#fbbf24'):'#22c55e'), borderRadius:6 }]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` 盈亏: ${fmtSigned(c.parsed.y)}`}}}, scales:{y:{ticks:{callback:v=>'₱'+(v/1000).toFixed(0)+'k'},grid:{color:'#f1f5f9'}}} }
+  });
+
+  // Findings
+  renderFindings(totalIncome, totalExpense, totalProfit, profitArr, labels, months);
+
+  // Detail table
+  renderDetailTable(labels);
+}
+
+function renderFindings(totalIncome, totalExpense, totalProfit, profitArr, labels, months) {
+  const findings = [];
+  const monthCount = months.length;
+  const avgLoss = totalProfit / monthCount;
+  const worstIdx = profitArr.indexOf(Math.min(...profitArr));
+  const bestIdx = profitArr.indexOf(Math.max(...profitArr));
+
+  if (totalProfit < 0) {
+    findings.push(`<strong>持续亏损：</strong>${monthCount} 个月${profitArr.every(v=>v<0)?'全部':`有 ${profitArr.filter(v=>v<0).length} 个月`}处于亏损状态，月均亏损约 ${fmtFull(Math.abs(avgLoss))}，累计亏损 ${fmtFull(Math.abs(totalProfit))}。`);
+  } else {
+    findings.push(`<strong>整体盈利：</strong>${monthCount} 个月累计盈余 ${fmtFull(totalProfit)}，月均 ${fmtFull(totalProfit/monthCount)}。`);
+  }
+
+  findings.push(`<strong>亏损最高峰：</strong>${labels[worstIdx]} 盈亏 ${fmtSigned(profitArr[worstIdx])}，收入 ${fmtFull(getMonthIncome(months[worstIdx]))}，支出 ${fmtFull(getMonthExpense(months[worstIdx]))}。`);
+
+  // Fixed cost analysis
+  const salaryTotal = getCatTotal('团体工资','expense');
+  const rentTotal = getCatTotal('房租','expense');
+  const fixedTotal = salaryTotal + rentTotal;
+  if (totalExpense > 0 && fixedTotal > 0) {
+    const fixedPct = (fixedTotal / totalExpense * 100).toFixed(1);
+    findings.push(`<strong>固定成本占比：</strong>团体工资 + 房租合计 ${fmtFull(fixedTotal)}，占总支出 ${fixedPct}%，运营刚性压力${fixedPct > 70 ? '极大' : '较高'}。`);
+  }
+
+  // Income structure
+  const tuitionTotal = getCatTotal('武术学费','income');
+  if (tuitionTotal > 0 && totalIncome > 0) {
+    const tPct = (tuitionTotal / totalIncome * 100).toFixed(1);
+    findings.push(`<strong>收入结构：</strong>武术学费占总收入 ${tPct}%（${fmtFull(tuitionTotal)}），${tPct > 70 ? '高度依赖单一收入来源' : '收入来源相对均衡'}。`);
+  }
+
+  // Electric trend
+  const elecCats = months.map(m => m.expenses && m.expenses['电费'] ? Number(m.expenses['电费']) : 0);
+  const elecMax = Math.max(...elecCats);
+  const elecMin = Math.min(...elecCats.filter(v => v > 0));
+  if (elecMax > elecMin * 1.5) {
+    findings.push(`<strong>电费波动：</strong>电费从最低 ${fmtFull(elecMin)} 升至 ${fmtFull(elecMax)}，涨幅 ${((elecMax/elecMin-1)*100).toFixed(0)}%，建议核查用电情况。`);
+  }
+
+  // Trend analysis
+  if (profitArr.length >= 3) {
+    const last3 = profitArr.slice(-3);
+    const prev3 = profitArr.slice(-6, -3);
+    if (prev3.length > 0) {
+      const lastAvg = last3.reduce((a,b)=>a+b,0)/last3.length;
+      const prevAvg = prev3.reduce((a,b)=>a+b,0)/prev3.length;
+      if (lastAvg > prevAvg) {
+        findings.push(`<strong>趋势向好：</strong>近 3 个月月均盈亏 ${fmtFull(lastAvg)}，较前 3 个月（${fmtFull(prevAvg)}）改善 ${fmtFull(lastAvg - prevAvg)}。`);
+      } else {
+        findings.push(`<strong>趋势恶化：</strong>近 3 个月月均盈亏 ${fmtFull(lastAvg)}，较前 3 个月（${fmtFull(prevAvg)}）进一步下降 ${fmtFull(prevAvg - lastAvg)}。`);
+      }
+    } else {
+      if (profitArr[profitArr.length-1] > profitArr[0]) {
+        findings.push(`<strong>趋势向好：</strong>从 ${labels[0]} 的 ${fmtSigned(profitArr[0])} 收窄至 ${labels[labels.length-1]} 的 ${fmtSigned(profitArr[profitArr.length-1])}。`);
+      }
+    }
+  }
+
+  document.getElementById('findingsBox').innerHTML = `
+    <h3>💡 主要发现与建议</h3>
+    <ul>${findings.map(f => `<li>${f}</li>`).join('')}</ul>`;
+}
+
+function renderDetailTable(labels) {
+  const months = db.months;
+  const colCount = labels.length + 2; // name + months + total
+  let html = `<thead><tr><th>收支项目</th>`;
+  labels.forEach(l => html += `<th>${l}</th>`);
+  html += `<th style="background:#eff6ff">合计</th></tr></thead><tbody>`;
+
+  // Expenses
+  html += `<tr class="section-row"><td colspan="${colCount}">支出项 / Expenses</td></tr>`;
+  db.expenseCats.forEach(cat => {
+    const rowTotal = getCatTotal(cat, 'expense');
+    html += `<tr class="row-out"><td>${cat}支出</td>`;
+    months.forEach(m => {
+      const v = m.expenses && m.expenses[cat];
+      html += `<td>${v ? fmt(v) : '<span style="color:#cbd5e1">—</span>'}</td>`;
+    });
+    html += `<td style="background:#eff6ff;font-weight:700">${fmt(rowTotal)}</td></tr>`;
+  });
+  // Expense total row
+  html += `<tr class="row-total"><td>总支出</td>`;
+  months.forEach(m => { html += `<td>${fmt(getMonthExpense(m))}</td>`; });
+  html += `<td style="background:#eff6ff">${fmt(months.reduce((a,m)=>a+getMonthExpense(m),0))}</td></tr>`;
+
+  // Income
+  html += `<tr class="section-row" style="background:#f0fdf4;color:#16a34a"><td colspan="${colCount}">收入项 / Income</td></tr>`;
+  db.incomeCats.forEach(cat => {
+    const rowTotal = getCatTotal(cat, 'income');
+    html += `<tr class="row-in"><td>${cat}收入</td>`;
+    months.forEach(m => {
+      const v = m.income && m.income[cat];
+      html += `<td>${v ? fmt(v) : '<span style="color:#cbd5e1">—</span>'}</td>`;
+    });
+    html += `<td style="background:#eff6ff;font-weight:700">${fmt(rowTotal)}</td></tr>`;
+  });
+  // Income total row
+  html += `<tr class="row-total"><td>总收入</td>`;
+  months.forEach(m => { html += `<td>${fmt(getMonthIncome(m))}</td>`; });
+  html += `<td style="background:#eff6ff">${fmt(months.reduce((a,m)=>a+getMonthIncome(m),0))}</td></tr>`;
+
+  // Profit row
+  html += `<tr class="row-loss"><td>盈亏</td>`;
+  months.forEach(m => {
+    const p = getMonthIncome(m) - getMonthExpense(m);
+    html += `<td>${fmtSigned(p)}</td>`;
+  });
+  const totalP = months.reduce((a,m)=>a+getMonthIncome(m)-getMonthExpense(m),0);
+  html += `<td style="background:#fef2f2">${fmtSigned(totalP)}</td></tr>`;
+
+  html += `</tbody>`;
+  document.getElementById('detailTable').innerHTML = html;
+}
+
+// ===================== Edit Table Rendering =====================
+function renderEditTable() {
+  const months = db.months;
+  const colCount = months.length + 3; // cat name + months + total + actions
+
+  let html = `<thead><tr>
+    <th style="min-width:120px">收支项目</th>
+    ${months.map((m,i) => `<th class="col-month-header">${m.label}<br><button class="icon-btn" onclick="deleteMonth(${i})" title="删除月份" style="font-size:11px;color:#dc2626">✕</button></th>`).join('')}
+    <th style="background:#eff6ff">合计</th>
+  </tr></thead><tbody>`;
+
+  // Expense section
+  html += `<tr class="section-row"><td colspan="${colCount}">支出项</td></tr>`;
+  db.expenseCats.forEach((cat, ci) => {
+    html += `<tr class="row-cat"><td class="cat-name">${cat}<button class="icon-btn" onclick="deleteCat('expense','${cat}')" title="删除" style="margin-left:4px">✕</button></td>`;
+    months.forEach((m, mi) => {
+      const v = m.expenses && m.expenses[cat];
+      html += `<td><input type="number" value="${v||''}" placeholder="0" oninput="updateCell('expense',${mi},'${cat}',this.value)"></td>`;
+    });
+    html += `<td class="col-total">${fmt(getCatTotal(cat,'expense'))}</td></tr>`;
+  });
+  // Expense total
+  html += `<tr class="row-total"><td>总支出</td>`;
+  months.forEach(m => { html += `<td>${fmt(getMonthExpense(m))}</td>`; });
+  html += `<td style="background:#eff6ff">${fmt(months.reduce((a,m)=>a+getMonthExpense(m),0))}</td></tr>`;
+
+  // Income section
+  html += `<tr class="section-row" style="background:#f0fdf4;color:#16a34a"><td colspan="${colCount}">收入项</td></tr>`;
+  db.incomeCats.forEach((cat, ci) => {
+    html += `<tr class="row-cat"><td class="cat-name">${cat}<button class="icon-btn" onclick="deleteCat('income','${cat}')" title="删除" style="margin-left:4px">✕</button></td>`;
+    months.forEach((m, mi) => {
+      const v = m.income && m.income[cat];
+      html += `<td><input type="number" value="${v||''}" placeholder="0" oninput="updateCell('income',${mi},'${cat}',this.value)"></td>`;
+    });
+    html += `<td class="col-total">${fmt(getCatTotal(cat,'income'))}</td></tr>`;
+  });
+  // Income total
+  html += `<tr class="row-total"><td>总收入</td>`;
+  months.forEach(m => { html += `<td>${fmt(getMonthIncome(m))}</td>`; });
+  html += `<td style="background:#eff6ff">${fmt(months.reduce((a,m)=>a+getMonthIncome(m),0))}</td></tr>`;
+
+  // Profit row
+  html += `<tr class="row-loss"><td>盈亏</td>`;
+  months.forEach(m => {
+    const p = getMonthIncome(m) - getMonthExpense(m);
+    html += `<td>${fmtSigned(p)}</td>`;
+  });
+  const tp = months.reduce((a,m)=>a+getMonthIncome(m)-getMonthExpense(m),0);
+  html += `<td style="background:#fef2f2">${fmtSigned(tp)}</td></tr>`;
+
+  html += `</tbody>`;
+  document.getElementById('editTable').innerHTML = html;
+}
+
+function updateCell(type, monthIdx, cat, value) {
+  const m = db.months[monthIdx];
+  const v = value === '' ? 0 : parseFloat(value);
+  if (type === 'expense') {
+    if (!m.expenses) m.expenses = {};
+    m.expenses[cat] = isNaN(v) ? 0 : v;
+  } else {
+    if (!m.income) m.income = {};
+    m.income[cat] = isNaN(v) ? 0 : v;
+  }
+  saveData();
+  // Update row total and column totals without full re-render
+  updateTotals();
+}
+
+function updateTotals() {
+  // Recalculate and update the "合计" column and total rows
+  const table = document.getElementById('editTable');
+  if (!table) return;
+
+  // Update each expense cat row total
+  db.expenseCats.forEach((cat, ci) => {
+    const rowIdx = ci + 1; // +1 for section row
+    const rows = table.querySelectorAll('tbody tr');
+    const expRows = [...rows].filter(r => r.classList.contains('row-cat'));
+    const targetRow = expRows[ci];
+    if (targetRow) {
+      const totalCell = targetRow.querySelector('.col-total');
+      if (totalCell) totalCell.innerHTML = fmt(getCatTotal(cat, 'expense'));
+    }
+  });
+
+  // Update income cat row totals
+  db.incomeCats.forEach((cat, ci) => {
+    const expRows = [...table.querySelectorAll('tbody tr')].filter(r => r.classList.contains('row-cat'));
+    const targetRow = expRows[db.expenseCats.length + ci];
+    if (targetRow) {
+      const totalCell = targetRow.querySelector('.col-total');
+      if (totalCell) totalCell.innerHTML = fmt(getCatTotal(cat, 'income'));
+    }
+  });
+
+  // Update total rows and profit row
+  const totalRows = [...table.querySelectorAll('tbody tr')].filter(r => r.classList.contains('row-total'));
+  const profitRow = table.querySelector('tr.row-loss');
+  const months = db.months;
+
+  if (totalRows.length >= 2) {
+    // Expense total
+    totalRows[0].querySelectorAll('td').forEach((td, i) => {
+      if (i === 0) return;
+      if (i === months.length + 1) { td.innerHTML = fmt(months.reduce((a,m)=>a+getMonthExpense(m),0)); return; }
+      const mi = i - 1;
+      if (months[mi]) td.innerHTML = fmt(getMonthExpense(months[mi]));
+    });
+    // Income total
+    totalRows[1].querySelectorAll('td').forEach((td, i) => {
+      if (i === 0) return;
+      if (i === months.length + 1) { td.innerHTML = fmt(months.reduce((a,m)=>a+getMonthIncome(m),0)); return; }
+      const mi = i - 1;
+      if (months[mi]) td.innerHTML = fmt(getMonthIncome(months[mi]));
+    });
+  }
+
+  if (profitRow) {
+    profitRow.querySelectorAll('td').forEach((td, i) => {
+      if (i === 0) return;
+      if (i === months.length + 1) {
+        const tp = months.reduce((a,m)=>a+getMonthIncome(m)-getMonthExpense(m),0);
+        td.innerHTML = fmtSigned(tp);
+        return;
+      }
+      const mi = i - 1;
+      if (months[mi]) {
+        const p = getMonthIncome(months[mi]) - getMonthExpense(months[mi]);
+        td.innerHTML = fmtSigned(p);
+      }
+    });
+  }
+}
+
+// ===================== Add / Delete Month =====================
+function addMonthModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  const nextNum = db.months.length + 1;
+  modal.innerHTML = `
+    <h3>添加月份</h3>
+    <div class="form-group"><label>月份名称</label><input id="new_month_label" value="${nextNum}月" placeholder="如：7月"></div>
+    <p style="font-size:13px;color:#94a3b8;margin-bottom:12px">新增月份的收支数据默认为 0，添加后可在表格中直接输入。</p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="confirmAddMonth()">添加</button>
+    </div>`;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  document.getElementById('new_month_label').focus();
+}
+
+function confirmAddMonth() {
+  const label = document.getElementById('new_month_label').value.trim();
+  if (!label) { showToast('请输入月份名称'); return; }
+  if (db.months.some(m => m.label === label)) { showToast('该月份已存在'); return; }
+  const newMonth = { label, expenses: {}, income: {} };
+  db.expenseCats.forEach(c => newMonth.expenses[c] = 0);
+  db.incomeCats.forEach(c => newMonth.income[c] = 0);
+  db.months.push(newMonth);
+  saveData();
+  document.querySelector('.modal-overlay').remove();
+  renderEditTable();
+  showToast(`已添加 ${label}`);
+}
+
+function deleteMonth(idx) {
+  if (db.months.length <= 1) { showToast('至少保留一个月'); return; }
+  if (!confirm(`确认删除「${db.months[idx].label}」？该月所有收支数据将被删除。`)) return;
+  db.months.splice(idx, 1);
+  saveData();
+  renderEditTable();
+  showToast('已删除');
+}
+
+// ===================== Add / Delete Category =====================
+function addCatModal(type) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <h3>添加${type==='expense'?'支出':'收入'}项目</h3>
+    <div class="form-group"><label>项目名称</label><input id="new_cat_name" placeholder="如：${type==='expense'?'物业费':'赞助费'}" autofocus></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="confirmAddCat('${type}')">添加</button>
+    </div>`;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('new_cat_name').focus(), 50);
+  document.getElementById('new_cat_name').addEventListener('keydown', e => { if(e.key==='Enter') confirmAddCat(type); });
+}
+
+function confirmAddCat(type) {
+  const name = document.getElementById('new_cat_name').value.trim();
+  if (!name) { showToast('请输入项目名称'); return; }
+  const cats = type === 'expense' ? db.expenseCats : db.incomeCats;
+  if (cats.includes(name)) { showToast('该项目已存在'); return; }
+  cats.push(name);
+  db.months.forEach(m => {
+    if (type === 'expense') { if(!m.expenses) m.expenses={}; m.expenses[name] = 0; }
+    else { if(!m.income) m.income={}; m.income[name] = 0; }
+  });
+  saveData();
+  document.querySelector('.modal-overlay').remove();
+  renderEditTable();
+  showToast(`已添加${type==='expense'?'支出':'收入'}项目「${name}」`);
+}
+
+function deleteCat(type, cat) {
+  if ((type==='expense'?db.expenseCats:db.incomeCats).length <= 1) { showToast('至少保留一个项目'); return; }
+  if (!confirm(`确认删除「${cat}」？所有月份的该项目数据将被删除。`)) return;
+  if (type === 'expense') {
+    db.expenseCats = db.expenseCats.filter(c => c !== cat);
+    db.months.forEach(m => { if (m.expenses) delete m.expenses[cat]; });
+  } else {
+    db.incomeCats = db.incomeCats.filter(c => c !== cat);
+    db.months.forEach(m => { if (m.income) delete m.income[cat]; });
+  }
+  saveData();
+  renderEditTable();
+  showToast('已删除');
+}
+
+// ===================== Data Management =====================
+function exportData() {
+  const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `收支数据_${db.year}_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('数据已导出');
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.months || !Array.isArray(data.months)) { showToast('数据格式不正确'); return; }
+      if (!confirm('导入将覆盖当前数据，确认继续？')) return;
+      db = data;
+      saveData();
+      renderEditTable();
+      showToast('数据已导入');
+    } catch(err) { showToast('文件解析失败'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function resetData() {
+  if (!confirm('确认恢复初始示例数据？当前所有修改将被覆盖。')) return;
+  db = defaultData();
+  saveData();
+  renderEditTable();
+  showToast('已恢复初始数据');
+}
+
+function clearAllData() {
+  if (!confirm('⚠️ 确认清空所有收支数据？此操作不可撤销！')) return;
+  if (!confirm('再次确认：所有月份数据和自定义项目都将被删除。')) return;
+  db = { year: new Date().getFullYear(), expenseCats: [...DEFAULT_EXPENSE_CATS], incomeCats: [...DEFAULT_INCOME_CATS], months: [] };
+  saveData();
+  renderEditTable();
+  showToast('所有数据已清空');
+}
+
+// ===================== Toast =====================
+function showToast(msg) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+// ===================== Init =====================
+renderReport();
+</script>
+</body>
+</html>
