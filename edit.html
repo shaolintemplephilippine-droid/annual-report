@@ -127,7 +127,14 @@
 
   <!-- Top actions -->
   <div class="actions">
+    <a href="index.html" class="btn btn-outline">← 返回公开报告页</a>
     <button onclick="window.print()" class="btn btn-primary">🖨 打印报告</button>
+  </div>
+
+  <!-- Mode tabs -->
+  <div class="mode-tabs">
+    <button class="mode-tab active" onclick="switchMode('report')">📊 报告视图</button>
+    <button class="mode-tab" onclick="switchMode('edit')">✏️ 数据录入</button>
   </div>
 
   <!-- ============ Report Panel ============ -->
@@ -175,6 +182,36 @@
 
   </div>
 
+  <!-- ============ Edit Panel ============ -->
+  <div class="edit-panel" id="editPanel">
+
+    <div class="card">
+      <h2>
+        <span class="h2-left">✏️ 收支数据录入</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-outline" onclick="addMonthModal()">+ 添加月份</button>
+          <button class="btn btn-sm btn-outline" onclick="addCatModal('expense')">+ 支出项目</button>
+          <button class="btn btn-sm btn-outline" onclick="addCatModal('income')">+ 收入项目</button>
+        </div>
+      </h2>
+      <p style="font-size:13px;color:#64748b;margin-bottom:16px">直接在表格中修改金额，数据自动保存在本机；如需让其他设备看到，请点击下方「☁️ 保存到云端」。</p>
+      <div style="overflow-x:auto"><table class="edit-table" id="editTable"></table></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="h2-left">⚙️ 数据管理</span></h2>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-success" onclick="saveToCloud()">☁️ 保存到云端（同步所有设备）</button>
+        <button class="btn btn-outline" onclick="exportData()">📥 导出数据</button>
+        <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">📤 导入数据</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+        <button class="btn btn-outline" onclick="resetData()">🔄 恢复初始数据</button>
+        <button class="btn btn-danger" onclick="clearAllData()">🗑️ 清空所有数据</button>
+      </div>
+      <p style="font-size:12px;color:#94a3b8;margin-top:12px">💡 在表格里修改的数据只保存在本机浏览器；点「保存到云端」后，约 1 分钟内所有设备打开链接都能看到最新数据。页面每次打开也会自动拉取云端最新版本。</p>
+    </div>
+
+  </div>
 
 </div>
 
@@ -184,7 +221,10 @@ const DB_KEY = 'annual_report_db_v1';
 const GH_REPO = 'shaolintemplephilippine-droid/annual-report';
 const GH_BRANCH = 'main';
 const GH_RAW_URL = 'https://raw.githubusercontent.com/' + GH_REPO + '/' + GH_BRANCH + '/index.html';
+const GH_TOKEN_KEY = 'annual_report_gh_token_v1';
 const LAST_SYNC_KEY = 'annual_report_last_sync_v1';
+const DEFAULT_EXPENSE_CATS = ['水费', '电费', '网费', '团体工资', '房租', '保姆工资', '保安工资'];
+const DEFAULT_INCOME_CATS = ['功德箱', '武术学费'];
 
 function defaultData() {
 /* DATA_START */
@@ -359,6 +399,20 @@ function getCatTotal(cat, type) {
   }, 0);
 }
 
+// ===================== Mode Switching =====================
+function switchMode(mode) {
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  if (mode === 'report') {
+    document.getElementById('reportPanel').classList.remove('hidden');
+    document.getElementById('editPanel').classList.remove('active');
+    renderReport();
+  } else {
+    document.getElementById('reportPanel').classList.add('hidden');
+    document.getElementById('editPanel').classList.add('active');
+    renderEditTable();
+  }
+}
 
 // ===================== Report Rendering =====================
 function renderReport() {
@@ -575,8 +629,362 @@ function renderDetailTable(labels) {
   document.getElementById('detailTable').innerHTML = html;
 }
 
+// ===================== Edit Table Rendering =====================
+function renderEditTable() {
+  const months = db.months;
+  const colCount = months.length + 3; // cat name + months + total + actions
 
+  let html = `<thead><tr>
+    <th style="min-width:120px">收支项目</th>
+    ${months.map((m,i) => `<th class="col-month-header">${m.label}<br><button class="icon-btn" onclick="deleteMonth(${i})" title="删除月份" style="font-size:11px;color:#dc2626">✕</button></th>`).join('')}
+    <th style="background:#eff6ff">合计</th>
+  </tr></thead><tbody>`;
+
+  // Expense section
+  html += `<tr class="section-row"><td colspan="${colCount}">支出项</td></tr>`;
+  db.expenseCats.forEach((cat, ci) => {
+    html += `<tr class="row-cat"><td class="cat-name">${cat}<button class="icon-btn" onclick="deleteCat('expense','${cat}')" title="删除" style="margin-left:4px">✕</button></td>`;
+    months.forEach((m, mi) => {
+      const v = m.expenses && m.expenses[cat];
+      html += `<td><input type="number" value="${v||''}" placeholder="0" oninput="updateCell('expense',${mi},'${cat}',this.value)"></td>`;
+    });
+    html += `<td class="col-total">${fmt(getCatTotal(cat,'expense'))}</td></tr>`;
+  });
+  // Expense total
+  html += `<tr class="row-total"><td>总支出</td>`;
+  months.forEach(m => { html += `<td>${fmt(getMonthExpense(m))}</td>`; });
+  html += `<td style="background:#eff6ff">${fmt(months.reduce((a,m)=>a+getMonthExpense(m),0))}</td></tr>`;
+
+  // Income section
+  html += `<tr class="section-row" style="background:#f0fdf4;color:#16a34a"><td colspan="${colCount}">收入项</td></tr>`;
+  db.incomeCats.forEach((cat, ci) => {
+    html += `<tr class="row-cat"><td class="cat-name">${cat}<button class="icon-btn" onclick="deleteCat('income','${cat}')" title="删除" style="margin-left:4px">✕</button></td>`;
+    months.forEach((m, mi) => {
+      const v = m.income && m.income[cat];
+      html += `<td><input type="number" value="${v||''}" placeholder="0" oninput="updateCell('income',${mi},'${cat}',this.value)"></td>`;
+    });
+    html += `<td class="col-total">${fmt(getCatTotal(cat,'income'))}</td></tr>`;
+  });
+  // Income total
+  html += `<tr class="row-total"><td>总收入</td>`;
+  months.forEach(m => { html += `<td>${fmt(getMonthIncome(m))}</td>`; });
+  html += `<td style="background:#eff6ff">${fmt(months.reduce((a,m)=>a+getMonthIncome(m),0))}</td></tr>`;
+
+  // Profit row
+  html += `<tr class="row-loss"><td>盈亏</td>`;
+  months.forEach(m => {
+    const p = getMonthIncome(m) - getMonthExpense(m);
+    html += `<td>${fmtSigned(p)}</td>`;
+  });
+  const tp = months.reduce((a,m)=>a+getMonthIncome(m)-getMonthExpense(m),0);
+  html += `<td style="background:#fef2f2">${fmtSigned(tp)}</td></tr>`;
+
+  html += `</tbody>`;
+  document.getElementById('editTable').innerHTML = html;
+}
+
+function updateCell(type, monthIdx, cat, value) {
+  const m = db.months[monthIdx];
+  const v = value === '' ? 0 : parseFloat(value);
+  if (type === 'expense') {
+    if (!m.expenses) m.expenses = {};
+    m.expenses[cat] = isNaN(v) ? 0 : v;
+  } else {
+    if (!m.income) m.income = {};
+    m.income[cat] = isNaN(v) ? 0 : v;
+  }
+  saveData();
+  // Update row total and column totals without full re-render
+  updateTotals();
+}
+
+function updateTotals() {
+  // Recalculate and update the "合计" column and total rows
+  const table = document.getElementById('editTable');
+  if (!table) return;
+
+  // Update each expense cat row total
+  db.expenseCats.forEach((cat, ci) => {
+    const rowIdx = ci + 1; // +1 for section row
+    const rows = table.querySelectorAll('tbody tr');
+    const expRows = [...rows].filter(r => r.classList.contains('row-cat'));
+    const targetRow = expRows[ci];
+    if (targetRow) {
+      const totalCell = targetRow.querySelector('.col-total');
+      if (totalCell) totalCell.innerHTML = fmt(getCatTotal(cat, 'expense'));
+    }
+  });
+
+  // Update income cat row totals
+  db.incomeCats.forEach((cat, ci) => {
+    const expRows = [...table.querySelectorAll('tbody tr')].filter(r => r.classList.contains('row-cat'));
+    const targetRow = expRows[db.expenseCats.length + ci];
+    if (targetRow) {
+      const totalCell = targetRow.querySelector('.col-total');
+      if (totalCell) totalCell.innerHTML = fmt(getCatTotal(cat, 'income'));
+    }
+  });
+
+  // Update total rows and profit row
+  const totalRows = [...table.querySelectorAll('tbody tr')].filter(r => r.classList.contains('row-total'));
+  const profitRow = table.querySelector('tr.row-loss');
+  const months = db.months;
+
+  if (totalRows.length >= 2) {
+    // Expense total
+    totalRows[0].querySelectorAll('td').forEach((td, i) => {
+      if (i === 0) return;
+      if (i === months.length + 1) { td.innerHTML = fmt(months.reduce((a,m)=>a+getMonthExpense(m),0)); return; }
+      const mi = i - 1;
+      if (months[mi]) td.innerHTML = fmt(getMonthExpense(months[mi]));
+    });
+    // Income total
+    totalRows[1].querySelectorAll('td').forEach((td, i) => {
+      if (i === 0) return;
+      if (i === months.length + 1) { td.innerHTML = fmt(months.reduce((a,m)=>a+getMonthIncome(m),0)); return; }
+      const mi = i - 1;
+      if (months[mi]) td.innerHTML = fmt(getMonthIncome(months[mi]));
+    });
+  }
+
+  if (profitRow) {
+    profitRow.querySelectorAll('td').forEach((td, i) => {
+      if (i === 0) return;
+      if (i === months.length + 1) {
+        const tp = months.reduce((a,m)=>a+getMonthIncome(m)-getMonthExpense(m),0);
+        td.innerHTML = fmtSigned(tp);
+        return;
+      }
+      const mi = i - 1;
+      if (months[mi]) {
+        const p = getMonthIncome(months[mi]) - getMonthExpense(months[mi]);
+        td.innerHTML = fmtSigned(p);
+      }
+    });
+  }
+}
+
+// ===================== Add / Delete Month =====================
+function addMonthModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  const nextNum = db.months.length + 1;
+  modal.innerHTML = `
+    <h3>添加月份</h3>
+    <div class="form-group"><label>月份名称</label><input id="new_month_label" value="${nextNum}月" placeholder="如：7月"></div>
+    <p style="font-size:13px;color:#94a3b8;margin-bottom:12px">新增月份的收支数据默认为 0，添加后可在表格中直接输入。</p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="confirmAddMonth()">添加</button>
+    </div>`;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  document.getElementById('new_month_label').focus();
+}
+
+function confirmAddMonth() {
+  const label = document.getElementById('new_month_label').value.trim();
+  if (!label) { showToast('请输入月份名称'); return; }
+  if (db.months.some(m => m.label === label)) { showToast('该月份已存在'); return; }
+  const newMonth = { label, expenses: {}, income: {} };
+  db.expenseCats.forEach(c => newMonth.expenses[c] = 0);
+  db.incomeCats.forEach(c => newMonth.income[c] = 0);
+  db.months.push(newMonth);
+  saveData();
+  document.querySelector('.modal-overlay').remove();
+  renderEditTable();
+  showToast(`已添加 ${label}`);
+}
+
+function deleteMonth(idx) {
+  if (db.months.length <= 1) { showToast('至少保留一个月'); return; }
+  if (!confirm(`确认删除「${db.months[idx].label}」？该月所有收支数据将被删除。`)) return;
+  db.months.splice(idx, 1);
+  saveData();
+  renderEditTable();
+  showToast('已删除');
+}
+
+// ===================== Add / Delete Category =====================
+function addCatModal(type) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <h3>添加${type==='expense'?'支出':'收入'}项目</h3>
+    <div class="form-group"><label>项目名称</label><input id="new_cat_name" placeholder="如：${type==='expense'?'物业费':'赞助费'}" autofocus></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="confirmAddCat('${type}')">添加</button>
+    </div>`;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('new_cat_name').focus(), 50);
+  document.getElementById('new_cat_name').addEventListener('keydown', e => { if(e.key==='Enter') confirmAddCat(type); });
+}
+
+function confirmAddCat(type) {
+  const name = document.getElementById('new_cat_name').value.trim();
+  if (!name) { showToast('请输入项目名称'); return; }
+  const cats = type === 'expense' ? db.expenseCats : db.incomeCats;
+  if (cats.includes(name)) { showToast('该项目已存在'); return; }
+  cats.push(name);
+  db.months.forEach(m => {
+    if (type === 'expense') { if(!m.expenses) m.expenses={}; m.expenses[name] = 0; }
+    else { if(!m.income) m.income={}; m.income[name] = 0; }
+  });
+  saveData();
+  document.querySelector('.modal-overlay').remove();
+  renderEditTable();
+  showToast(`已添加${type==='expense'?'支出':'收入'}项目「${name}」`);
+}
+
+function deleteCat(type, cat) {
+  if ((type==='expense'?db.expenseCats:db.incomeCats).length <= 1) { showToast('至少保留一个项目'); return; }
+  if (!confirm(`确认删除「${cat}」？所有月份的该项目数据将被删除。`)) return;
+  if (type === 'expense') {
+    db.expenseCats = db.expenseCats.filter(c => c !== cat);
+    db.months.forEach(m => { if (m.expenses) delete m.expenses[cat]; });
+  } else {
+    db.incomeCats = db.incomeCats.filter(c => c !== cat);
+    db.months.forEach(m => { if (m.income) delete m.income[cat]; });
+  }
+  saveData();
+  renderEditTable();
+  showToast('已删除');
+}
+
+// ===================== Data Management =====================
+function exportData() {
+  const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `收支数据_${db.year}_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('数据已导出');
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.months || !Array.isArray(data.months)) { showToast('数据格式不正确'); return; }
+      if (!confirm('导入将覆盖当前数据，确认继续？')) return;
+      db = data;
+      saveData();
+      renderEditTable();
+      showToast('数据已导入');
+    } catch(err) { showToast('文件解析失败'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function resetData() {
+  if (!confirm('确认恢复初始示例数据？当前所有修改将被覆盖。')) return;
+  db = defaultData();
+  saveData();
+  renderEditTable();
+  showToast('已恢复初始数据');
+}
+
+function clearAllData() {
+  if (!confirm('⚠️ 确认清空所有收支数据？此操作不可撤销！')) return;
+  if (!confirm('再次确认：所有月份数据和自定义项目都将被删除。')) return;
+  db = { year: new Date().getFullYear(), expenseCats: [...DEFAULT_EXPENSE_CATS], incomeCats: [...DEFAULT_INCOME_CATS], months: [] };
+  saveData();
+  renderEditTable();
+  showToast('所有数据已清空');
+}
+
+// ===================== Cloud Sync (GitHub) =====================
+function b64encodeUtf8(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function b64decodeUtf8(b64) {
+  const bin = atob(b64.replace(/\s/g, ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
 function fmtTime(t) { return new Date(t).toLocaleString('zh-CN'); }
+
+function tokenModal() {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); resolve(null); } });
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <h3>🔑 设置 GitHub 令牌</h3>
+      <p style="font-size:12px;color:#64748b;margin-bottom:12px;line-height:1.6">每台设备只需设置一次。令牌仅用于把这份报表的数据写回 GitHub 仓库，不会发送到任何其他地方。</p>
+      <div class="form-group"><label>令牌（github_pat_ 开头的一长串字符）</label><input id="gh_token_input" type="password" placeholder="粘贴 Fine-grained Token" autofocus></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" id="gh_token_cancel">取消</button>
+        <button class="btn btn-primary" id="gh_token_ok">确定</button>
+      </div>`;
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    const input = modal.querySelector('#gh_token_input');
+    setTimeout(() => input.focus(), 50);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { overlay.remove(); resolve(input.value.trim()); } });
+    modal.querySelector('#gh_token_cancel').onclick = () => { overlay.remove(); resolve(null); };
+    modal.querySelector('#gh_token_ok').onclick = () => { overlay.remove(); resolve(input.value.trim()); };
+  });
+}
+
+async function getGHToken() {
+  let token = localStorage.getItem(GH_TOKEN_KEY);
+  if (token) return token;
+  token = await tokenModal();
+  if (token) localStorage.setItem(GH_TOKEN_KEY, token);
+  return token;
+}
+
+async function saveToCloud() {
+  const token = await getGHToken();
+  if (!token) { showToast('未设置令牌，已取消保存'); return; }
+  showToast('正在保存到云端…');
+  try {
+    const apiUrl = 'https://api.github.com/repos/' + GH_REPO + '/contents/index.html';
+    const headers = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+    const res = await fetch(apiUrl, { headers: headers });
+    if (res.status === 401 || res.status === 403) { localStorage.removeItem(GH_TOKEN_KEY); showToast('令牌无效或已过期，请重新设置'); return; }
+    if (!res.ok) { showToast('读取云端文件失败（' + res.status + '）'); return; }
+    const info = await res.json();
+    const html = b64decodeUtf8(info.content);
+    const dataBlock = /\/\* DATA_START \*\/[\s\S]*?\/\* DATA_END \*\//;
+    if (!dataBlock.test(html)) { showToast('云端文件格式异常，已取消'); return; }
+    saveData();
+    const block = '/* DATA_START */\n  return ' + JSON.stringify(db, null, 2) + ';\n  /* DATA_END */';
+    const newHtml = html.replace(dataBlock, block);
+    const put = await fetch(apiUrl, {
+      method: 'PUT',
+      headers: headers,
+      body: JSON.stringify({ message: '网页端更新数据 ' + fmtTime(db.updatedAt), content: b64encodeUtf8(newHtml), sha: info.sha, branch: GH_BRANCH })
+    });
+    if (put.status === 401 || put.status === 403) { localStorage.removeItem(GH_TOKEN_KEY); showToast('令牌无效或权限不足（需要 Contents 读写权限）'); return; }
+    if (!put.ok) { const err = await put.json().catch(() => ({})); showToast('保存失败：' + (err.message || put.status)); return; }
+    localStorage.setItem(LAST_SYNC_KEY, String(db.updatedAt));
+    showToast('✅ 已保存到云端，约 1 分钟后所有设备可见');
+  } catch (e) {
+    showToast('网络错误，保存失败，请稍后重试');
+  }
+}
 
 async function syncFromCloud() {
   try {
@@ -599,6 +1007,7 @@ async function syncFromCloud() {
       persistDb();
       localStorage.setItem(LAST_SYNC_KEY, String(remoteTime));
       renderReport();
+      renderEditTable();
       showToast('已自动同步云端最新数据');
     }
   } catch (e) { /* 离线或网络问题：使用本地数据 */ }
@@ -616,8 +1025,23 @@ function showToast(msg) {
 }
 
 // ===================== Init =====================
-renderReport();
-syncFromCloud();
+// ===================== Edit Page Access Control =====================
+const EDIT_PASSPHRASE = 'pscc2026'; // 内部编辑密码，建议修改后重新部署
+
+function askPassphrase() {
+  const input = prompt('此页面为内部数据录入使用，请输入密码：');
+  return input === EDIT_PASSPHRASE;
+}
+
+(function initEditPage() {
+  if (!askPassphrase()) {
+    alert('密码错误，正在跳转到公开报告页...');
+    location.href = 'index.html';
+    return;
+  }
+  renderReport();
+  syncFromCloud();
+})();
 </script>
 </body>
 </html>
