@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>年度月度收支总览 · 管理层报告</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f1f5f9; color: #0f172a; line-height: 1.6; padding: 32px 24px; }
@@ -107,9 +108,16 @@
   .mode-tab.active { color: #1e40af; border-bottom-color: #1e40af; background: #eff6ff; }
   .mode-tab:hover:not(.active) { background: #f8fafc; }
 
+  /* Auth overlay */
+  .auth-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15,23,42,0.55); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+  .auth-overlay.hidden { display: none; }
+  .auth-box { background: #fff; border-radius: 14px; padding: 32px; width: 92%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+  .auth-box h2 { font-size: 20px; margin-bottom: 6px; }
+  .auth-box .auth-sub { font-size: 13px; color: #64748b; margin-bottom: 18px; }
+
   @media print {
     body { background: #fff; padding: 0; }
-    .actions, .mode-tabs, .edit-panel { display: none !important; }
+    .actions, .mode-tabs, .edit-panel, .auth-overlay { display: none !important; }
     .report-panel { display: block !important; }
     .card { box-shadow: none; border: 1px solid #e2e8f0; page-break-inside: avoid; }
     .report-header { box-shadow: none; }
@@ -123,11 +131,29 @@
 </style>
 </head>
 <body>
+
+<!-- Auth overlay (edit page requires login) -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-box">
+    <h2>🔐 数据录入登录</h2>
+    <div class="auth-sub">本页面为内部数据录入使用，请登录账号。多设备登录同一账号即可同步编辑。</div>
+    <div class="form-group"><label>邮箱</label><input id="authEmail" type="email" placeholder="you@example.com" autocomplete="username"></div>
+    <div class="form-group"><label>密码</label><input id="authPassword" type="password" placeholder="至少 6 位" autocomplete="current-password"></div>
+    <div id="authError" style="color:#dc2626;font-size:13px;min-height:18px;margin-bottom:10px"></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="signIn()">登录</button>
+      <button class="btn btn-outline" style="flex:1;justify-content:center" onclick="signUp()">注册新账号</button>
+    </div>
+  </div>
+</div>
+
 <div class="report">
 
   <!-- Top actions -->
   <div class="actions">
     <a href="index.html" class="btn btn-outline">← 返回公开报告页</a>
+    <span id="userEmail" style="font-size:13px;color:#64748b;align-self:center"></span>
+    <button id="logoutBtn" class="btn btn-outline" onclick="signOut()">退出登录</button>
     <button onclick="window.print()" class="btn btn-primary">🖨 打印报告</button>
   </div>
 
@@ -194,7 +220,7 @@
           <button class="btn btn-sm btn-outline" onclick="addCatModal('income')">+ 收入项目</button>
         </div>
       </h2>
-      <p style="font-size:13px;color:#64748b;margin-bottom:16px">直接在表格中修改金额，数据自动保存在本机；如需让其他设备看到，请点击下方「☁️ 保存到云端」。</p>
+      <p style="font-size:13px;color:#64748b;margin-bottom:16px">直接在表格中修改金额，数据自动保存在本机；点下方「☁️ 保存到云端」后，所有设备立即同步。</p>
       <div style="overflow-x:auto"><table class="edit-table" id="editTable"></table></div>
     </div>
 
@@ -208,7 +234,7 @@
         <button class="btn btn-outline" onclick="resetData()">🔄 恢复初始数据</button>
         <button class="btn btn-danger" onclick="clearAllData()">🗑️ 清空所有数据</button>
       </div>
-      <p style="font-size:12px;color:#94a3b8;margin-top:12px">💡 在表格里修改的数据只保存在本机浏览器；点「保存到云端」后，约 1 分钟内所有设备打开链接都能看到最新数据。页面每次打开也会自动拉取云端最新版本。</p>
+      <p style="font-size:12px;color:#94a3b8;margin-top:12px">💡 表格修改先保存在本机浏览器；点「保存到云端」立即写入云端数据库，其他设备打开页面或点「刷新」即可看到最新数据。页面每次打开也会自动拉取云端最新版本。</p>
     </div>
 
   </div>
@@ -218,10 +244,8 @@
 <script>
 // ===================== Data Model =====================
 const DB_KEY = 'annual_report_db_v1';
-const GH_REPO = 'shaolintemplephilippine-droid/annual-report';
-const GH_BRANCH = 'main';
-const GH_RAW_URL = 'https://raw.githubusercontent.com/' + GH_REPO + '/' + GH_BRANCH + '/index.html';
-const GH_TOKEN_KEY = 'annual_report_gh_token_v1';
+const SUPABASE_URL = 'https://wftnszpquwlqmgcevkyj.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_RJbXFWVO0UAsslybWKj1Ig_uRyi3dj1';
 const LAST_SYNC_KEY = 'annual_report_last_sync_v1';
 const DEFAULT_EXPENSE_CATS = ['水费', '电费', '网费', '团体工资', '房租', '保姆工资', '保安工资'];
 const DEFAULT_INCOME_CATS = ['功德箱', '武术学费'];
@@ -374,6 +398,9 @@ function saveData() { db.updatedAt = Date.now(); persistDb(); }
 
 let db = loadData();
 let charts = {};
+let _supabase = null;
+let _currentUser = null;
+let baseUpdatedAt = 0; // 云端数据版本（上次加载/保存时的 updatedAt）
 
 // ===================== Utils =====================
 function fmt(n) {
@@ -907,110 +934,126 @@ function clearAllData() {
   showToast('所有数据已清空');
 }
 
-// ===================== Cloud Sync (GitHub) =====================
-function b64encodeUtf8(str) {
-  const bytes = new TextEncoder().encode(str);
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-  return btoa(bin);
-}
-function b64decodeUtf8(b64) {
-  const bin = atob(b64.replace(/\s/g, ''));
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new TextDecoder().decode(bytes);
-}
+// ===================== Cloud Sync (Supabase) =====================
 function fmtTime(t) { return new Date(t).toLocaleString('zh-CN'); }
 
-function tokenModal() {
-  return new Promise(resolve => {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); resolve(null); } });
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.innerHTML = `
-      <h3>🔑 设置 GitHub 令牌</h3>
-      <p style="font-size:12px;color:#64748b;margin-bottom:12px;line-height:1.6">每台设备只需设置一次。令牌仅用于把这份报表的数据写回 GitHub 仓库，不会发送到任何其他地方。</p>
-      <div class="form-group"><label>令牌（github_pat_ 开头的一长串字符）</label><input id="gh_token_input" type="password" placeholder="粘贴 Fine-grained Token" autofocus></div>
-      <div class="modal-actions">
-        <button class="btn btn-outline" id="gh_token_cancel">取消</button>
-        <button class="btn btn-primary" id="gh_token_ok">确定</button>
-      </div>`;
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-    const input = modal.querySelector('#gh_token_input');
-    setTimeout(() => input.focus(), 50);
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') { overlay.remove(); resolve(input.value.trim()); } });
-    modal.querySelector('#gh_token_cancel').onclick = () => { overlay.remove(); resolve(null); };
-    modal.querySelector('#gh_token_ok').onclick = () => { overlay.remove(); resolve(input.value.trim()); };
-  });
+function initSupabase() {
+  try { _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch (e) { _supabase = null; }
 }
 
-async function getGHToken() {
-  let token = localStorage.getItem(GH_TOKEN_KEY);
-  if (token) return token;
-  token = await tokenModal();
-  if (token) localStorage.setItem(GH_TOKEN_KEY, token);
-  return token;
+async function loadCloudData() {
+  if (!_supabase) return null;
+  const { data: row, error } = await _supabase.from('annual_report_data').select('data').eq('id', 1).maybeSingle();
+  if (error) throw error;
+  return (row && row.data) ? row.data : null;
 }
 
 async function saveToCloud() {
-  const token = await getGHToken();
-  if (!token) { showToast('未设置令牌，已取消保存'); return; }
+  if (!_currentUser) { showToast('请先登录'); return; }
   showToast('正在保存到云端…');
   try {
-    const apiUrl = 'https://api.github.com/repos/' + GH_REPO + '/contents/index.html';
-    const headers = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
-    const res = await fetch(apiUrl, { headers: headers });
-    if (res.status === 401 || res.status === 403) { localStorage.removeItem(GH_TOKEN_KEY); showToast('令牌无效或已过期，请重新设置'); return; }
-    if (!res.ok) { showToast('读取云端文件失败（' + res.status + '）'); return; }
-    const info = await res.json();
-    const html = b64decodeUtf8(info.content);
-    const dataBlock = /\/\* DATA_START \*\/[\s\S]*?\/\* DATA_END \*\//;
-    if (!dataBlock.test(html)) { showToast('云端文件格式异常，已取消'); return; }
+    // 冲突检测：云端版本比上次加载时新，提醒覆盖
+    const remote = await loadCloudData();
+    const remoteTime = remote ? (remote.updatedAt || 0) : 0;
+    if (remoteTime > baseUpdatedAt && remoteTime > (db.updatedAt || 0)) {
+      const ok = confirm('云端已有更新的版本（' + fmtTime(remoteTime) + ' 保存）。\n继续保存将覆盖云端版本，确认？');
+      if (!ok) { showToast('已取消保存'); return; }
+    }
     saveData();
-    const block = '/* DATA_START */\n  return ' + JSON.stringify(db, null, 2) + ';\n  /* DATA_END */';
-    const newHtml = html.replace(dataBlock, block);
-    const put = await fetch(apiUrl, {
-      method: 'PUT',
-      headers: headers,
-      body: JSON.stringify({ message: '网页端更新数据 ' + fmtTime(db.updatedAt), content: b64encodeUtf8(newHtml), sha: info.sha, branch: GH_BRANCH })
+    const { error } = await _supabase.from('annual_report_data').upsert({
+      id: 1,
+      data: JSON.parse(JSON.stringify(db)),
+      updated_at: new Date().toISOString()
     });
-    if (put.status === 401 || put.status === 403) { localStorage.removeItem(GH_TOKEN_KEY); showToast('令牌无效或权限不足（需要 Contents 读写权限）'); return; }
-    if (!put.ok) { const err = await put.json().catch(() => ({})); showToast('保存失败：' + (err.message || put.status)); return; }
+    if (error) { showToast('保存失败：' + error.message); return; }
+    baseUpdatedAt = db.updatedAt;
     localStorage.setItem(LAST_SYNC_KEY, String(db.updatedAt));
-    showToast('✅ 已保存到云端，约 1 分钟后所有设备可见');
+    showToast('✅ 已保存到云端，所有设备已同步');
   } catch (e) {
     showToast('网络错误，保存失败，请稍后重试');
   }
 }
 
 async function syncFromCloud() {
+  if (!_supabase) return;
   try {
-    const res = await fetch(GH_RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) return;
-    const html = await res.text();
-    const m = html.match(/\/\* DATA_START \*\/([\s\S]*?)\/\* DATA_END \*\//);
-    if (!m) return;
-    const jsonStr = m[1].trim().replace(/^return\s+/, '').replace(/;\s*$/, '');
-    const remote = JSON.parse(jsonStr);
+    const remote = await loadCloudData();
+    if (!remote) return;
     const remoteTime = remote.updatedAt || 0;
     const localTime = db.updatedAt || 0;
     const lastSync = Number(localStorage.getItem(LAST_SYNC_KEY) || 0);
     if (remoteTime > localTime) {
       if (localTime > lastSync) {
         const useRemote = confirm('云端有更新的数据（' + fmtTime(remoteTime) + ' 保存）。\n本机也有尚未同步到云端的修改（' + fmtTime(localTime) + '）。\n\n【确定】使用云端版本（放弃本机修改）\n【取消】保留本机修改（之后可点「保存到云端」覆盖云端）');
-        if (!useRemote) return;
+        if (!useRemote) { baseUpdatedAt = Math.max(baseUpdatedAt, remoteTime); return; }
       }
       db = remote;
       persistDb();
       localStorage.setItem(LAST_SYNC_KEY, String(remoteTime));
+      baseUpdatedAt = remoteTime;
       renderReport();
       renderEditTable();
       showToast('已自动同步云端最新数据');
+    } else {
+      baseUpdatedAt = Math.max(baseUpdatedAt, remoteTime);
     }
   } catch (e) { /* 离线或网络问题：使用本地数据 */ }
+}
+
+// ===================== Auth =====================
+function setAuthUI() {
+  const overlay = document.getElementById('authOverlay');
+  const emailSpan = document.getElementById('userEmail');
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (_currentUser) {
+    emailSpan.textContent = _currentUser.email;
+    logoutBtn.style.display = '';
+    overlay.classList.add('hidden');
+  } else {
+    emailSpan.textContent = '';
+    logoutBtn.style.display = 'none';
+    overlay.classList.remove('hidden');
+  }
+}
+
+async function signIn() {
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const errEl = document.getElementById('authError');
+  errEl.textContent = '';
+  if (!email || !password) { errEl.textContent = '请填写邮箱和密码'; return; }
+  const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+  if (error) { errEl.textContent = error.message; return; }
+  _currentUser = data.user;
+  setAuthUI();
+  await syncFromCloud();
+  renderReport();
+  showToast('登录成功');
+}
+
+async function signUp() {
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const errEl = document.getElementById('authError');
+  errEl.textContent = '';
+  if (!email || !password) { errEl.textContent = '请填写邮箱和密码'; return; }
+  if (password.length < 6) { errEl.textContent = '密码至少需要 6 位'; return; }
+  const { data, error } = await _supabase.auth.signUp({ email, password });
+  if (error) { errEl.textContent = error.message; return; }
+  if (data.session) {
+    _currentUser = data.user;
+    setAuthUI();
+    showToast('注册成功');
+  } else {
+    showToast('注册成功，请查收验证邮件后登录');
+  }
+}
+
+async function signOut() {
+  await _supabase.auth.signOut();
+  _currentUser = null;
+  setAuthUI();
+  showToast('已退出登录');
 }
 
 // ===================== Toast =====================
@@ -1025,22 +1068,20 @@ function showToast(msg) {
 }
 
 // ===================== Init =====================
-// ===================== Edit Page Access Control =====================
-const EDIT_PASSPHRASE = 'pscc2026'; // 内部编辑密码，建议修改后重新部署
+initSupabase();
+localStorage.removeItem('annual_report_gh_token_v1'); // 清理旧版 GitHub 令牌
+renderReport();
 
-function askPassphrase() {
-  const input = prompt('此页面为内部数据录入使用，请输入密码：');
-  return input === EDIT_PASSPHRASE;
-}
-
-(function initEditPage() {
-  if (!askPassphrase()) {
-    alert('密码错误，正在跳转到公开报告页...');
-    location.href = 'index.html';
-    return;
+(async function initEditPage() {
+  if (!_supabase) { showToast('云端服务加载失败，当前仅可本机编辑'); setAuthUI(); return; }
+  const { data: { session } } = await _supabase.auth.getSession();
+  if (session && session.user) {
+    _currentUser = session.user;
+    setAuthUI();
+    await syncFromCloud();
+  } else {
+    setAuthUI();
   }
-  renderReport();
-  syncFromCloud();
 })();
 </script>
 </body>

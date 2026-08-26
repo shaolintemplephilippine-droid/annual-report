@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>年度月度收支总览 · 管理层报告</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f1f5f9; color: #0f172a; line-height: 1.6; padding: 32px 24px; }
@@ -127,6 +128,7 @@
 
   <!-- Top actions -->
   <div class="actions">
+    <button onclick="syncFromCloud()" class="btn btn-outline">🔄 刷新数据</button>
     <button onclick="window.print()" class="btn btn-primary">🖨 打印报告</button>
   </div>
 
@@ -139,6 +141,7 @@
       <div class="meta">
         <div class="meta-item">报告期间：<span id="rpPeriod"></span></div>
         <div class="meta-item">生成日期：<span id="reportDate"></span></div>
+        <div class="meta-item">最后更新：<span id="lastUpdated">—</span></div>
         <div class="meta-item">货币单位：<span>₱ PHP（菲律宾比索）</span></div>
       </div>
     </div>
@@ -181,10 +184,9 @@
 <script>
 // ===================== Data Model =====================
 const DB_KEY = 'annual_report_db_v1';
-const GH_REPO = 'shaolintemplephilippine-droid/annual-report';
-const GH_BRANCH = 'main';
-const GH_RAW_URL = 'https://raw.githubusercontent.com/' + GH_REPO + '/' + GH_BRANCH + '/index.html';
-const LAST_SYNC_KEY = 'annual_report_last_sync_v1';
+const SUPABASE_URL = 'https://wftnszpquwlqmgcevkyj.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_RJbXFWVO0UAsslybWKj1Ig_uRyi3dj1';
+let _supabase = null;
 
 function defaultData() {
 /* DATA_START */
@@ -379,6 +381,7 @@ function renderReport() {
   // Header meta
   document.getElementById('rpPeriod').textContent = `${db.year}年 ${months[0].label} — ${months[months.length-1].label}`;
   document.getElementById('reportDate').textContent = new Date().toLocaleDateString('zh-CN', {year:'numeric', month:'long', day:'numeric'});
+  document.getElementById('lastUpdated').textContent = db.updatedAt ? fmtTime(db.updatedAt) : '—';
 
   // KPI cards
   const profitColor = totalProfit < 0 ? 'danger' : 'success';
@@ -578,30 +581,29 @@ function renderDetailTable(labels) {
 
 function fmtTime(t) { return new Date(t).toLocaleString('zh-CN'); }
 
-async function syncFromCloud() {
+function initSupabase() {
+  try { _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch (e) { _supabase = null; }
+}
+
+// 从云端拉取最新数据（编辑页保存后，此处可见最新版本）
+async function syncFromCloud(silent) {
+  if (!_supabase) return;
   try {
-    const res = await fetch(GH_RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
-    if (!res.ok) return;
-    const html = await res.text();
-    const m = html.match(/\/\* DATA_START \*\/([\s\S]*?)\/\* DATA_END \*\//);
-    if (!m) return;
-    const jsonStr = m[1].trim().replace(/^return\s+/, '').replace(/;\s*$/, '');
-    const remote = JSON.parse(jsonStr);
+    const { data: row, error } = await _supabase.from('annual_report_data').select('data').eq('id', 1).maybeSingle();
+    if (error) { if (!silent) showToast('云端读取失败，请稍后重试'); return; }
+    if (!row || !row.data) { if (!silent) showToast('云端暂无数据'); return; }
+    const remote = row.data;
     const remoteTime = remote.updatedAt || 0;
     const localTime = db.updatedAt || 0;
-    const lastSync = Number(localStorage.getItem(LAST_SYNC_KEY) || 0);
     if (remoteTime > localTime) {
-      if (localTime > lastSync) {
-        const useRemote = confirm('云端有更新的数据（' + fmtTime(remoteTime) + ' 保存）。\n本机也有尚未同步到云端的修改（' + fmtTime(localTime) + '）。\n\n【确定】使用云端版本（放弃本机修改）\n【取消】保留本机修改（之后可点「保存到云端」覆盖云端）');
-        if (!useRemote) return;
-      }
       db = remote;
       persistDb();
-      localStorage.setItem(LAST_SYNC_KEY, String(remoteTime));
       renderReport();
-      showToast('已自动同步云端最新数据');
+      if (!silent) showToast('已同步云端最新数据');
+    } else if (!silent) {
+      showToast('当前已是最新数据');
     }
-  } catch (e) { /* 离线或网络问题：使用本地数据 */ }
+  } catch (e) { if (!silent) showToast('网络异常，请稍后重试'); }
 }
 
 // ===================== Toast =====================
@@ -616,8 +618,10 @@ function showToast(msg) {
 }
 
 // ===================== Init =====================
+initSupabase();
 renderReport();
-syncFromCloud();
+syncFromCloud(true); // 初次静默同步
+setInterval(() => syncFromCloud(true), 60000); // 每分钟自动检查云端更新
 </script>
 </body>
 </html>
