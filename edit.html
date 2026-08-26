@@ -85,6 +85,9 @@
   .edit-table .col-month-header { min-width: 90px; }
   .edit-table .icon-btn { cursor: pointer; border: none; background: none; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
   .edit-table .icon-btn:hover { background: #fee2e2; }
+  .edit-table select { padding: 5px 6px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 13px; font-family: inherit; background: #fff; }
+  .edit-table select:focus { outline: none; border-color: #1e40af; box-shadow: 0 0 0 2px rgba(30,64,175,0.1); }
+  .edit-table input[type="date"] { text-align: left; }
 
   /* Modal */
   .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
@@ -161,6 +164,8 @@
   <div class="mode-tabs">
     <button class="mode-tab active" onclick="switchMode('report')">📊 报告视图</button>
     <button class="mode-tab" onclick="switchMode('edit')">✏️ 数据录入</button>
+    <button class="mode-tab" onclick="switchMode('utilities')">⚡ 水电费明细</button>
+    <button class="mode-tab" onclick="switchMode('tuition')">🥋 武术费明细</button>
   </div>
 
   <!-- ============ Report Panel ============ -->
@@ -206,6 +211,16 @@
       <div style="overflow-x:auto"><table id="detailTable"></table></div>
     </div>
 
+    <div class="card" id="utilitiesCard" style="display:none">
+      <h2><span class="h2-left">⚡ 水电费明细</span></h2>
+      <div id="utilitiesContent"></div>
+    </div>
+
+    <div class="card" id="tuitionCard" style="display:none">
+      <h2><span class="h2-left">🥋 武术费收款明细</span></h2>
+      <div id="tuitionContent"></div>
+    </div>
+
   </div>
 
   <!-- ============ Edit Panel ============ -->
@@ -235,6 +250,52 @@
         <button class="btn btn-danger" onclick="clearAllData()">🗑️ 清空所有数据</button>
       </div>
       <p style="font-size:12px;color:#94a3b8;margin-top:12px">💡 表格修改先保存在本机浏览器；点「保存到云端」立即写入云端数据库，其他设备打开页面或点「刷新」即可看到最新数据。页面每次打开也会自动拉取云端最新版本。</p>
+    </div>
+
+  </div>
+
+  <!-- ============ Utilities Panel ============ -->
+  <div class="edit-panel" id="utilitiesPanel">
+
+    <div class="card">
+      <h2>
+        <span class="h2-left">⚡ 电费明细（按户号）</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-outline" onclick="addMeterModal()">+ 添加电表</button>
+          <button class="btn btn-sm btn-outline" onclick="document.getElementById('utilitiesImportFile').click()">📥 导入水电费JSON</button>
+          <input type="file" id="utilitiesImportFile" accept=".json" style="display:none" onchange="importUtilitiesFile(event)">
+        </div>
+      </h2>
+      <p style="font-size:13px;color:#64748b;margin-bottom:16px">按电表户号录入每月电费（含素斋馆与我方各电表）；修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
+      <div style="overflow-x:auto"><table class="edit-table" id="electricMatrixTable"></table></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="h2-left">🔌 电费缴费状态</span></h2>
+      <div style="overflow-x:auto"><table class="edit-table" id="electricPayTable"></table></div>
+    </div>
+
+    <div class="card">
+      <h2>
+        <span class="h2-left">💧 水费缴费记录</span>
+        <button class="btn btn-sm btn-outline" onclick="addWaterModal()">+ 添加水费记录</button>
+      </h2>
+      <div style="overflow-x:auto"><table class="edit-table" id="waterPayTable"></table></div>
+    </div>
+
+  </div>
+
+  <!-- ============ Tuition Panel ============ -->
+  <div class="edit-panel" id="tuitionPanel">
+
+    <div class="card">
+      <h2>
+        <span class="h2-left">🥋 武术费收费明细</span>
+        <button class="btn btn-sm btn-outline" onclick="tuitionModal()">+ 添加缴费记录</button>
+      </h2>
+      <div id="tuitionSummary"></div>
+      <div style="overflow-x:auto"><table class="edit-table" id="tuitionTable"></table></div>
+      <p style="font-size:12px;color:#94a3b8;margin-top:12px">💡 缴费方式支持：现金 / 银行转账 / gcash / 微信 / 支付宝 / 支票 / 其他。修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
     </div>
 
   </div>
@@ -430,15 +491,14 @@ function getCatTotal(cat, type) {
 function switchMode(mode) {
   document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
   event.target.classList.add('active');
-  if (mode === 'report') {
-    document.getElementById('reportPanel').classList.remove('hidden');
-    document.getElementById('editPanel').classList.remove('active');
-    renderReport();
-  } else {
-    document.getElementById('reportPanel').classList.add('hidden');
-    document.getElementById('editPanel').classList.add('active');
-    renderEditTable();
-  }
+  document.getElementById('reportPanel').classList.toggle('hidden', mode !== 'report');
+  ['editPanel', 'utilitiesPanel', 'tuitionPanel'].forEach(id => {
+    document.getElementById(id).classList.toggle('active', id === mode + 'Panel');
+  });
+  if (mode === 'report') renderReport();
+  else if (mode === 'edit') renderEditTable();
+  else if (mode === 'utilities') renderUtilities();
+  else if (mode === 'tuition') renderTuition();
 }
 
 // ===================== Report Rendering =====================
@@ -539,6 +599,10 @@ function renderReport() {
 
   // Detail table
   renderDetailTable(labels);
+
+  // Utilities & tuition detail cards
+  renderUtilitiesPublic();
+  renderTuitionPublic();
 }
 
 function renderFindings(totalIncome, totalExpense, totalProfit, profitArr, labels, months) {
@@ -654,6 +718,114 @@ function renderDetailTable(labels) {
 
   html += `</tbody>`;
   document.getElementById('detailTable').innerHTML = html;
+}
+
+// ===================== Utilities & Tuition (report view) =====================
+const UTIL_MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+const PAY_METHODS = ['现金','银行转账','gcash','微信','支付宝','支票','其他'];
+
+function renderUtilitiesPublic() {
+  const card = document.getElementById('utilitiesCard');
+  if (!card) return;
+  const u = db.utilities;
+  if (!u || ((!u.meters || !u.meters.length) && (!u.waterPayments || !u.waterPayments.length))) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  let html = '';
+
+  // Electric bills matrix
+  if (u.meters && u.meters.length) {
+    html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin-bottom:10px">⚡ 电费明细（按户号）</div><div style="overflow-x:auto"><table><thead><tr><th>户号 / 归属</th>';
+    UTIL_MONTHS.forEach(m => html += `<th>${m}</th>`);
+    html += '<th style="background:#eff6ff">合计</th></tr></thead><tbody>';
+    const billsOf = acct => (u.electricBills || {})[acct] || {};
+    let grand = 0;
+    u.meters.forEach(mt => {
+      const bills = billsOf(mt.accountNo);
+      let total = 0;
+      let row = `<tr><td>${mt.accountNo}<br><span style="font-size:11px;color:#94a3b8">${mt.owner || ''}${mt.unit ? ' · ' + mt.unit : ''}</span></td>`;
+      UTIL_MONTHS.forEach(m => {
+        const v = Number(bills[m]) || 0;
+        total += v;
+        row += `<td>${v ? fmtFull(v) : '<span style="color:#cbd5e1">—</span>'}</td>`;
+      });
+      grand += total;
+      html += row + `<td style="background:#eff6ff;font-weight:700">${fmt(total)}</td></tr>`;
+    });
+    html += `<tr class="row-total"><td>电费合计</td>`;
+    UTIL_MONTHS.forEach(m => {
+      const s = u.meters.reduce((a, mt) => a + (Number(billsOf(mt.accountNo)[m]) || 0), 0);
+      html += `<td>${s ? fmt(s) : '<span style="color:#cbd5e1">—</span>'}</td>`;
+    });
+    html += `<td style="background:#eff6ff">${fmt(grand)}</td></tr></tbody></table></div>`;
+  }
+
+  // Electric payment status
+  if (u.electricPayments && u.electricPayments.length) {
+    html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin:18px 0 10px">🔌 电费缴费状态</div><div style="overflow-x:auto"><table><thead><tr><th>月份</th><th>缴费日期</th><th>状态</th></tr></thead><tbody>';
+    u.electricPayments.forEach(p => {
+      const paid = p.status === 'paid';
+      html += `<tr><td>${p.month}月</td><td>${p.payDate || '—'}</td><td>${paid ? '<span style="color:#16a34a;font-weight:600">✓ 已缴</span>' : '<span style="color:#f59e0b;font-weight:600">待缴</span>'}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Water payments
+  if (u.waterPayments && u.waterPayments.length) {
+    html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin:18px 0 10px">💧 水费缴费记录</div><div style="overflow-x:auto"><table><thead><tr><th>月份</th><th>缴费日期</th><th>状态</th><th>付款金额</th><th>账单总额</th><th>附加费</th><th>账单周期</th><th>账单号</th><th>备注</th></tr></thead><tbody>';
+    let totalAmt = 0, totalBill = 0, totalExtra = 0;
+    u.waterPayments.forEach(w => {
+      totalAmt += Number(w.amount) || 0;
+      totalBill += Number(w.totalAmount) || 0;
+      totalExtra += Number(w.extraAmount) || 0;
+      const paid = w.status === 'paid';
+      html += `<tr><td>${w.month}月</td><td>${w.payDate || '—'}</td><td>${paid ? '<span style="color:#16a34a;font-weight:600">✓ 已缴</span>' : '<span style="color:#f59e0b;font-weight:600">待缴</span>'}</td><td>${fmtFull(w.amount)}</td><td>${fmtFull(w.totalAmount)}</td><td>${w.extraAmount ? fmtFull(w.extraAmount) : '<span style="color:#cbd5e1">—</span>'}</td><td>${w.billPeriod || '—'}</td><td>${w.billNo || '—'}</td><td>${w.note || '—'}</td></tr>`;
+    });
+    html += `<tr class="row-total"><td>合计</td><td></td><td></td><td>${fmtFull(totalAmt)}</td><td>${fmtFull(totalBill)}</td><td>${totalExtra ? fmtFull(totalExtra) : '—'}</td><td colspan="3"></td></tr></tbody></table></div>`;
+  }
+
+  document.getElementById('utilitiesContent').innerHTML = html;
+}
+
+function renderTuitionPublic() {
+  const card = document.getElementById('tuitionCard');
+  if (!card) return;
+  const recs = db.tuitionRecords || [];
+  if (!recs.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const sorted = [...recs].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.id || 0) - (a.id || 0));
+  const total = recs.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+
+  // Summary + method breakdown
+  const byMethod = {};
+  recs.forEach(r => {
+    const m = r.method || '其他';
+    byMethod[m] = byMethod[m] || { count: 0, amount: 0 };
+    byMethod[m].count++;
+    byMethod[m].amount += Number(r.amount) || 0;
+  });
+  let html = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+    <div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:8px;padding:12px 18px">
+      <div style="font-size:12px;color:#64748b">共 ${recs.length} 笔 · 收款总额</div>
+      <div style="font-size:24px;font-weight:700;color:#16a34a">${fmtFull(total)}</div>
+    </div>
+  </div>`;
+  html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin-bottom:10px">💰 按缴费方式统计</div><div style="overflow-x:auto"><table><thead><tr><th>缴费方式</th><th>笔数</th><th>金额</th><th>占比</th></tr></thead><tbody>';
+  Object.entries(byMethod).sort((a, b) => b[1].amount - a[1].amount).forEach(([m, v]) => {
+    html += `<tr><td>${m}</td><td>${v.count}</td><td>${fmtFull(v.amount)}</td><td>${total > 0 ? (v.amount / total * 100).toFixed(1) + '%' : '—'}</td></tr>`;
+  });
+  html += `<tr class="row-total"><td>合计</td><td>${recs.length}</td><td>${fmtFull(total)}</td><td>100%</td></tr></tbody></table></div>`;
+
+  // Records
+  html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin:18px 0 10px">📋 收费明细记录</div><div style="overflow-x:auto"><table><thead><tr><th>缴费日期</th><th>学员姓名</th><th>报课类别</th><th>费用</th><th>缴费方式</th><th>备注</th></tr></thead><tbody>';
+  sorted.forEach(r => {
+    html += `<tr><td>${r.date || '—'}</td><td>${r.student || '—'}</td><td>${r.course || '—'}</td><td>${fmtFull(r.amount)}</td><td>${r.method || '—'}</td><td>${r.note || '—'}</td></tr>`;
+  });
+  html += `<tr class="row-total"><td>合计</td><td colspan="2">${recs.length} 笔</td><td>${fmtFull(total)}</td><td colspan="2"></td></tr></tbody></table></div>`;
+
+  document.getElementById('tuitionContent').innerHTML = html;
 }
 
 // ===================== Edit Table Rendering =====================
@@ -934,6 +1106,320 @@ function clearAllData() {
   showToast('所有数据已清空');
 }
 
+// ===================== Utilities Editing (水电费明细) =====================
+function getUtilities() {
+  if (!db.utilities) db.utilities = { meters: [], electricBills: {}, electricPayments: [], waterPayments: [], nextId: { electric: 1, water: 1 } };
+  if (!db.utilities.nextId) db.utilities.nextId = { electric: 1, water: 1 };
+  return db.utilities;
+}
+
+function renderUtilities() {
+  renderElectricMatrix();
+  renderElectricPayTable();
+  renderWaterPayTable();
+}
+
+function renderElectricMatrix() {
+  const u = getUtilities();
+  let html = `<thead><tr><th style="min-width:140px">户号 / 归属</th>${UTIL_MONTHS.map(m => `<th class="col-month-header">${m}</th>`).join('')}<th style="background:#eff6ff">合计</th></tr></thead><tbody>`;
+  if (!u.meters.length) {
+    html += `<tr><td colspan="14" style="text-align:center;color:#94a3b8;padding:20px">暂无电表，点右上角「+ 添加电表」或「导入水电费JSON」</td></tr>`;
+  }
+  u.meters.forEach((mt, i) => {
+    const bills = (u.electricBills || {})[mt.accountNo] || {};
+    const total = UTIL_MONTHS.reduce((a, m) => a + (Number(bills[m]) || 0), 0);
+    html += `<tr class="row-cat"><td class="cat-name">${mt.accountNo}<button class="icon-btn" onclick="deleteMeter(${i})" title="删除" style="margin-left:4px">✕</button><br><span style="font-size:11px;color:#94a3b8;font-weight:400">${mt.owner || ''}${mt.unit ? ' · ' + mt.unit : ''}</span></td>`;
+    UTIL_MONTHS.forEach(m => {
+      html += `<td><input type="number" value="${bills[m] || ''}" placeholder="0" oninput="updateElectricBill(${i},'${m}',this.value)"></td>`;
+    });
+    html += `<td class="col-total">${fmt(total)}</td></tr>`;
+  });
+  if (u.meters.length) {
+    html += `<tr class="row-total"><td>电费合计</td>`;
+    UTIL_MONTHS.forEach(m => {
+      const s = u.meters.reduce((a, mt) => a + (Number(((u.electricBills || {})[mt.accountNo] || {})[m]) || 0), 0);
+      html += `<td>${fmt(s)}</td>`;
+    });
+    const grand = u.meters.reduce((a, mt) => {
+      const b = (u.electricBills || {})[mt.accountNo] || {};
+      return a + UTIL_MONTHS.reduce((x, m) => x + (Number(b[m]) || 0), 0);
+    }, 0);
+    html += `<td style="background:#eff6ff">${fmt(grand)}</td></tr>`;
+  }
+  html += '</tbody>';
+  document.getElementById('electricMatrixTable').innerHTML = html;
+}
+
+function updateElectricBill(meterIdx, month, value) {
+  const u = getUtilities();
+  const mt = u.meters[meterIdx];
+  if (!mt) return;
+  if (!u.electricBills) u.electricBills = {};
+  if (!u.electricBills[mt.accountNo]) u.electricBills[mt.accountNo] = {};
+  const v = value === '' ? 0 : parseFloat(value);
+  u.electricBills[mt.accountNo][month] = isNaN(v) ? 0 : v;
+  saveData();
+  updateElectricTotals(meterIdx);
+}
+
+function updateElectricTotals(meterIdx) {
+  const u = getUtilities();
+  const table = document.getElementById('electricMatrixTable');
+  if (!table) return;
+  const catRows = [...table.querySelectorAll('tbody tr.row-cat')];
+  const row = catRows[meterIdx];
+  if (row && u.meters[meterIdx]) {
+    const bills = (u.electricBills || {})[u.meters[meterIdx].accountNo] || {};
+    row.querySelector('.col-total').innerHTML = fmt(UTIL_MONTHS.reduce((a, m) => a + (Number(bills[m]) || 0), 0));
+  }
+  const totalRow = table.querySelector('tbody tr.row-total');
+  if (totalRow) {
+    const tds = totalRow.querySelectorAll('td');
+    UTIL_MONTHS.forEach((m, i) => {
+      const s = u.meters.reduce((a, mt) => a + (Number(((u.electricBills || {})[mt.accountNo] || {})[m]) || 0), 0);
+      if (tds[i + 1]) tds[i + 1].innerHTML = fmt(s);
+    });
+    const grand = u.meters.reduce((a, mt) => {
+      const b = (u.electricBills || {})[mt.accountNo] || {};
+      return a + UTIL_MONTHS.reduce((x, m) => x + (Number(b[m]) || 0), 0);
+    }, 0);
+    if (tds[tds.length - 1]) tds[tds.length - 1].innerHTML = fmt(grand);
+  }
+}
+
+function renderElectricPayTable() {
+  const u = getUtilities();
+  UTIL_MONTHS.forEach((m, idx) => {
+    if (!u.electricPayments.some(p => Number(p.month) === idx + 1)) {
+      u.electricPayments.push({ id: u.nextId.electric++, month: idx + 1, payDate: '', status: 'pending' });
+    }
+  });
+  u.electricPayments.sort((a, b) => a.month - b.month);
+  let html = `<thead><tr><th>月份</th><th>缴费日期</th><th>状态</th></tr></thead><tbody>`;
+  u.electricPayments.forEach(p => {
+    html += `<tr><td>${p.month}月</td>
+      <td><input type="date" value="${p.payDate || ''}" onchange="updateElectricPay(${p.id},'payDate',this.value)"></td>
+      <td><select onchange="updateElectricPay(${p.id},'status',this.value)">
+        <option value="pending" ${p.status !== 'paid' ? 'selected' : ''}>待缴</option>
+        <option value="paid" ${p.status === 'paid' ? 'selected' : ''}>已缴</option>
+      </select></td></tr>`;
+  });
+  html += '</tbody>';
+  document.getElementById('electricPayTable').innerHTML = html;
+}
+
+function updateElectricPay(id, field, value) {
+  const u = getUtilities();
+  const p = u.electricPayments.find(x => x.id === id);
+  if (!p) return;
+  p[field] = value;
+  saveData();
+}
+
+function addMeterModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <h3>添加电表</h3>
+    <div class="form-row">
+      <div class="form-group"><label>户号</label><input id="mt_account" placeholder="如 2124051344"></div>
+      <div class="form-group"><label>表号</label><input id="mt_meter_no" placeholder="如 122BAC107668"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>单元</label><input id="mt_unit" placeholder="如 J / F（可空）"></div>
+      <div class="form-group"><label>归属</label><select id="mt_owner"><option value="我方">我方</option><option value="素斋馆">素斋馆</option></select></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="confirmAddMeter()">添加</button>
+    </div>`;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('mt_account').focus(), 50);
+}
+
+function confirmAddMeter() {
+  const accountNo = document.getElementById('mt_account').value.trim();
+  if (!accountNo) { showToast('请输入户号'); return; }
+  const u = getUtilities();
+  if (u.meters.some(m => m.accountNo === accountNo)) { showToast('该户号已存在'); return; }
+  u.meters.push({
+    id: Date.now(),
+    accountNo,
+    meterNo: document.getElementById('mt_meter_no').value.trim(),
+    unit: document.getElementById('mt_unit').value.trim(),
+    name: '',
+    owner: document.getElementById('mt_owner').value
+  });
+  saveData();
+  document.querySelector('.modal-overlay').remove();
+  renderElectricMatrix();
+  showToast('已添加电表，记得保存到云端');
+}
+
+function deleteMeter(idx) {
+  const u = getUtilities();
+  const mt = u.meters[idx];
+  if (!mt) return;
+  if (!confirm(`确认删除电表「${mt.accountNo}（${mt.owner || ''}）」？该表所有月份电费数据将被删除。`)) return;
+  u.meters.splice(idx, 1);
+  if (u.electricBills) delete u.electricBills[mt.accountNo];
+  saveData();
+  renderElectricMatrix();
+  showToast('已删除');
+}
+
+function renderWaterPayTable() {
+  const u = getUtilities();
+  let html = `<thead><tr><th>月份</th><th>缴费日期</th><th>付款金额</th><th>状态</th><th>账单号</th><th>账单周期</th><th>账单总额</th><th>附加费</th><th>备注</th><th></th></tr></thead><tbody>`;
+  if (!u.waterPayments.length) {
+    html += `<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:20px">暂无水费记录，点右上角「+ 添加水费记录」</td></tr>`;
+  }
+  u.waterPayments.forEach(w => {
+    html += `<tr>
+      <td><select onchange="updateWaterPay(${w.id},'month',this.value)">${UTIL_MONTHS.map((m, i) => `<option value="${i + 1}" ${Number(w.month) === i + 1 ? 'selected' : ''}>${m}</option>`).join('')}</select></td>
+      <td><input type="date" value="${w.payDate || ''}" onchange="updateWaterPay(${w.id},'payDate',this.value)"></td>
+      <td><input type="number" value="${w.amount || ''}" placeholder="0" oninput="updateWaterPay(${w.id},'amount',this.value)"></td>
+      <td><select onchange="updateWaterPay(${w.id},'status',this.value)"><option value="pending" ${w.status !== 'paid' ? 'selected' : ''}>待缴</option><option value="paid" ${w.status === 'paid' ? 'selected' : ''}>已缴</option></select></td>
+      <td><input type="text" value="${w.billNo || ''}" oninput="updateWaterPay(${w.id},'billNo',this.value)"></td>
+      <td><input type="text" value="${w.billPeriod || ''}" placeholder="如 2026.1.16-2.16" oninput="updateWaterPay(${w.id},'billPeriod',this.value)"></td>
+      <td><input type="number" value="${w.totalAmount || ''}" placeholder="0" oninput="updateWaterPay(${w.id},'totalAmount',this.value)"></td>
+      <td><input type="number" value="${w.extraAmount || ''}" placeholder="0" oninput="updateWaterPay(${w.id},'extraAmount',this.value)"></td>
+      <td><input type="text" value="${w.note || ''}" oninput="updateWaterPay(${w.id},'note',this.value)"></td>
+      <td><button class="icon-btn" onclick="deleteWaterPay(${w.id})" title="删除">✕</button></td>
+    </tr>`;
+  });
+  if (u.waterPayments.length) {
+    const ta = u.waterPayments.reduce((a, w) => a + (Number(w.amount) || 0), 0);
+    const tt = u.waterPayments.reduce((a, w) => a + (Number(w.totalAmount) || 0), 0);
+    const te = u.waterPayments.reduce((a, w) => a + (Number(w.extraAmount) || 0), 0);
+    html += `<tr class="row-total"><td>合计</td><td></td><td>${fmt(ta)}</td><td></td><td></td><td></td><td>${fmt(tt)}</td><td>${fmt(te)}</td><td></td><td></td></tr>`;
+  }
+  html += '</tbody>';
+  document.getElementById('waterPayTable').innerHTML = html;
+}
+
+function updateWaterPay(id, field, value) {
+  const u = getUtilities();
+  const w = u.waterPayments.find(x => x.id === id);
+  if (!w) return;
+  if (['amount', 'totalAmount', 'extraAmount'].includes(field)) {
+    const v = value === '' ? 0 : parseFloat(value);
+    w[field] = isNaN(v) ? 0 : v;
+  } else if (field === 'month') {
+    w.month = parseInt(value);
+  } else {
+    w[field] = value;
+  }
+  saveData();
+  updateWaterTotals();
+}
+
+function updateWaterTotals() {
+  const u = getUtilities();
+  const table = document.getElementById('waterPayTable');
+  if (!table) return;
+  const tr = table.querySelector('tbody tr.row-total');
+  if (!tr) return;
+  const tds = tr.querySelectorAll('td');
+  const ta = u.waterPayments.reduce((a, w) => a + (Number(w.amount) || 0), 0);
+  const tt = u.waterPayments.reduce((a, w) => a + (Number(w.totalAmount) || 0), 0);
+  const te = u.waterPayments.reduce((a, w) => a + (Number(w.extraAmount) || 0), 0);
+  if (tds[2]) tds[2].innerHTML = fmt(ta);
+  if (tds[6]) tds[6].innerHTML = fmt(tt);
+  if (tds[7]) tds[7].innerHTML = fmt(te);
+}
+
+function addWaterModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <h3>添加水费记录</h3>
+    <div class="form-row">
+      <div class="form-group"><label>月份</label><select id="wp_month">${UTIL_MONTHS.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('')}</select></div>
+      <div class="form-group"><label>缴费日期</label><input id="wp_payDate" type="date"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>付款金额（₱）</label><input id="wp_amount" type="number" placeholder="0"></div>
+      <div class="form-group"><label>状态</label><select id="wp_status"><option value="paid">已缴</option><option value="pending">待缴</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>账单号</label><input id="wp_billNo" placeholder="可空"></div>
+      <div class="form-group"><label>账单周期</label><input id="wp_billPeriod" placeholder="如 2026.1.16-2.16"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>账单总额（₱）</label><input id="wp_totalAmount" type="number" placeholder="0"></div>
+      <div class="form-group"><label>附加费（₱）</label><input id="wp_extraAmount" type="number" placeholder="0"></div>
+    </div>
+    <div class="form-group"><label>备注</label><input id="wp_note" placeholder="可空"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="confirmAddWater()">添加</button>
+    </div>`;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+function confirmAddWater() {
+  const u = getUtilities();
+  u.waterPayments.push({
+    id: u.nextId.water++,
+    month: parseInt(document.getElementById('wp_month').value),
+    payDate: document.getElementById('wp_payDate').value,
+    amount: parseFloat(document.getElementById('wp_amount').value) || 0,
+    status: document.getElementById('wp_status').value,
+    billNo: document.getElementById('wp_billNo').value.trim(),
+    billPeriod: document.getElementById('wp_billPeriod').value.trim(),
+    totalAmount: parseFloat(document.getElementById('wp_totalAmount').value) || 0,
+    note: document.getElementById('wp_note').value.trim(),
+    extraAmount: parseFloat(document.getElementById('wp_extraAmount').value) || 0
+  });
+  saveData();
+  document.querySelector('.modal-overlay').remove();
+  renderWaterPayTable();
+  showToast('已添加水费记录，记得保存到云端');
+}
+
+function deleteWaterPay(id) {
+  const u = getUtilities();
+  if (!confirm('确认删除这条水费记录？')) return;
+  u.waterPayments = u.waterPayments.filter(w => w.id !== id);
+  saveData();
+  renderWaterPayTable();
+  showToast('已删除');
+}
+
+function importUtilitiesFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const d = JSON.parse(e.target.result);
+      if (!d.electricBills && !d.waterPayments) { showToast('文件格式不正确（需包含 electricBills 或 waterPayments 字段）'); return; }
+      if (!confirm('导入将覆盖当前全部水电费明细（不影响收支总表数据），确认继续？')) return;
+      db.utilities = {
+        meters: d.metersInfo || d.meters || [],
+        electricBills: d.electricBills || {},
+        electricPayments: d.electricPayments || [],
+        waterPayments: d.waterPayments || [],
+        nextId: d.nextId || { electric: 1, water: 1 }
+      };
+      saveData();
+      renderUtilities();
+      showToast('水电费明细已导入，记得保存到云端');
+    } catch (err) { showToast('文件解析失败'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
 // ===================== Cloud Sync (Supabase) =====================
 function fmtTime(t) { return new Date(t).toLocaleString('zh-CN'); }
 
@@ -993,6 +1479,8 @@ async function syncFromCloud() {
       baseUpdatedAt = remoteTime;
       renderReport();
       renderEditTable();
+      renderUtilities();
+      renderTuition();
       showToast('已自动同步云端最新数据');
     } else {
       baseUpdatedAt = Math.max(baseUpdatedAt, remoteTime);
@@ -1054,6 +1542,125 @@ async function signOut() {
   _currentUser = null;
   setAuthUI();
   showToast('已退出登录');
+}
+
+// ===================== Tuition Records (武术费收费明细) =====================
+function escAttr(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function getTuitionRecords() {
+  if (!db.tuitionRecords) db.tuitionRecords = [];
+  return db.tuitionRecords;
+}
+
+function renderTuition() {
+  renderTuitionSummary();
+  renderTuitionTable();
+}
+
+function renderTuitionSummary() {
+  const recs = getTuitionRecords();
+  const total = recs.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+  const byMethod = {};
+  recs.forEach(r => {
+    const m = r.method || '其他';
+    byMethod[m] = (byMethod[m] || 0) + (Number(r.amount) || 0);
+  });
+  const chips = PAY_METHODS.filter(m => byMethod[m]).map(m => `<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border-radius:999px;padding:4px 12px;font-size:12px;color:#475569;margin:2px 4px 2px 0">${m} <b style="color:#16a34a">${fmtFull(byMethod[m])}</b></span>`).join('');
+  document.getElementById('tuitionSummary').innerHTML = `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:8px;padding:10px 16px">
+        <div style="font-size:12px;color:#64748b">共 ${recs.length} 笔 · 收款总额</div>
+        <div style="font-size:20px;font-weight:700;color:#16a34a">${fmtFull(total)}</div>
+      </div>
+      <div style="flex:1;min-width:260px">${chips || '<span style="font-size:13px;color:#94a3b8">暂无缴费记录，点右上角「+ 添加缴费记录」录入</span>'}</div>
+    </div>`;
+}
+
+function renderTuitionTable() {
+  const recs = getTuitionRecords();
+  const sorted = [...recs].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.id || 0) - (a.id || 0));
+  let html = `<thead><tr><th>缴费日期</th><th>学员姓名</th><th>报课类别</th><th>费用（₱）</th><th>缴费方式</th><th>备注</th><th></th></tr></thead><tbody>`;
+  if (!sorted.length) {
+    html += `<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:20px">暂无缴费记录</td></tr>`;
+  }
+  sorted.forEach(r => {
+    html += `<tr>
+      <td>${escAttr(r.date) || '—'}</td>
+      <td>${escAttr(r.student) || '—'}</td>
+      <td>${escAttr(r.course) || '—'}</td>
+      <td>${fmtFull(r.amount)}</td>
+      <td>${escAttr(r.method) || '—'}</td>
+      <td>${escAttr(r.note) || '—'}</td>
+      <td><button class="icon-btn" onclick="tuitionModal(${r.id})" title="编辑" style="color:#1e40af">✎</button><button class="icon-btn" onclick="deleteTuition(${r.id})" title="删除">✕</button></td>
+    </tr>`;
+  });
+  html += '</tbody>';
+  document.getElementById('tuitionTable').innerHTML = html;
+}
+
+let _editingTuitionId = null;
+
+function tuitionModal(id) {
+  _editingTuitionId = id || null;
+  const rec = id ? getTuitionRecords().find(r => r.id === id) : null;
+  const courses = [...new Set(getTuitionRecords().map(r => r.course).filter(Boolean))];
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <h3>${rec ? '✎ 编辑缴费记录' : '🥋 添加缴费记录'}</h3>
+    <div class="form-row">
+      <div class="form-group"><label>缴费日期</label><input id="tu_date" type="date" value="${rec ? rec.date || '' : ''}"></div>
+      <div class="form-group"><label>学员姓名</label><input id="tu_student" value="${rec ? escAttr(rec.student) : ''}" placeholder="学员姓名"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>报课类别</label><input id="tu_course" list="tu_course_list" value="${rec ? escAttr(rec.course) : ''}" placeholder="如：少儿武术班">
+        <datalist id="tu_course_list">${courses.map(c => `<option value="${escAttr(c)}">`).join('')}</datalist>
+      </div>
+      <div class="form-group"><label>费用（₱）</label><input id="tu_amount" type="number" value="${rec ? rec.amount || '' : ''}" placeholder="0"></div>
+    </div>
+    <div class="form-group"><label>缴费方式</label><select id="tu_method">${PAY_METHODS.map(m => `<option value="${m}" ${rec && rec.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
+    <div class="form-group"><label>备注</label><input id="tu_note" value="${rec ? escAttr(rec.note) : ''}" placeholder="可空"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="saveTuition()">${rec ? '保存修改' : '添加'}</button>
+    </div>`;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('tu_date').focus(), 50);
+}
+
+function saveTuition() {
+  const date = document.getElementById('tu_date').value;
+  const student = document.getElementById('tu_student').value.trim();
+  const course = document.getElementById('tu_course').value.trim();
+  const amount = parseFloat(document.getElementById('tu_amount').value) || 0;
+  const method = document.getElementById('tu_method').value;
+  const note = document.getElementById('tu_note').value.trim();
+  if (!date) { showToast('请选择缴费日期'); return; }
+  if (!student) { showToast('请输入学员姓名'); return; }
+  const recs = getTuitionRecords();
+  if (_editingTuitionId) {
+    const rec = recs.find(r => r.id === _editingTuitionId);
+    if (rec) Object.assign(rec, { date, student, course, amount, method, note });
+    showToast('已更新缴费记录，记得保存到云端');
+  } else {
+    recs.push({ id: Date.now(), date, student, course, amount, method, note });
+    showToast('已添加缴费记录，记得保存到云端');
+  }
+  saveData();
+  document.querySelector('.modal-overlay').remove();
+  renderTuition();
+}
+
+function deleteTuition(id) {
+  if (!confirm('确认删除这条缴费记录？')) return;
+  db.tuitionRecords = getTuitionRecords().filter(r => r.id !== id);
+  saveData();
+  renderTuition();
+  showToast('已删除');
 }
 
 // ===================== Toast =====================

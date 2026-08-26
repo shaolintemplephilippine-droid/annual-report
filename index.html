@@ -176,6 +176,16 @@
       <div style="overflow-x:auto"><table id="detailTable"></table></div>
     </div>
 
+    <div class="card" id="utilitiesCard" style="display:none">
+      <h2><span class="h2-left">⚡ 水电费明细</span></h2>
+      <div id="utilitiesContent"></div>
+    </div>
+
+    <div class="card" id="tuitionCard" style="display:none">
+      <h2><span class="h2-left">🥋 武术费收款明细</span></h2>
+      <div id="tuitionContent"></div>
+    </div>
+
   </div>
 
 
@@ -461,6 +471,10 @@ function renderReport() {
 
   // Detail table
   renderDetailTable(labels);
+
+  // Utilities & tuition detail cards
+  renderUtilitiesPublic();
+  renderTuitionPublic();
 }
 
 function renderFindings(totalIncome, totalExpense, totalProfit, profitArr, labels, months) {
@@ -578,6 +592,112 @@ function renderDetailTable(labels) {
   document.getElementById('detailTable').innerHTML = html;
 }
 
+// ===================== Utilities & Tuition (detail cards) =====================
+const UTIL_MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+function renderUtilitiesPublic() {
+  const card = document.getElementById('utilitiesCard');
+  if (!card) return;
+  const u = db.utilities;
+  if (!u || ((!u.meters || !u.meters.length) && (!u.waterPayments || !u.waterPayments.length))) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  let html = '';
+
+  // Electric bills matrix
+  if (u.meters && u.meters.length) {
+    html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin-bottom:10px">⚡ 电费明细（按户号）</div><div style="overflow-x:auto"><table><thead><tr><th>户号 / 归属</th>';
+    UTIL_MONTHS.forEach(m => html += `<th>${m}</th>`);
+    html += '<th style="background:#eff6ff">合计</th></tr></thead><tbody>';
+    const billsOf = acct => (u.electricBills || {})[acct] || {};
+    let grand = 0;
+    u.meters.forEach(mt => {
+      const bills = billsOf(mt.accountNo);
+      let total = 0;
+      let row = `<tr><td>${mt.accountNo}<br><span style="font-size:11px;color:#94a3b8">${mt.owner || ''}${mt.unit ? ' · ' + mt.unit : ''}</span></td>`;
+      UTIL_MONTHS.forEach(m => {
+        const v = Number(bills[m]) || 0;
+        total += v;
+        row += `<td>${v ? fmtFull(v) : '<span style="color:#cbd5e1">—</span>'}</td>`;
+      });
+      grand += total;
+      html += row + `<td style="background:#eff6ff;font-weight:700">${fmt(total)}</td></tr>`;
+    });
+    html += `<tr class="row-total"><td>电费合计</td>`;
+    UTIL_MONTHS.forEach(m => {
+      const s = u.meters.reduce((a, mt) => a + (Number(billsOf(mt.accountNo)[m]) || 0), 0);
+      html += `<td>${s ? fmt(s) : '<span style="color:#cbd5e1">—</span>'}</td>`;
+    });
+    html += `<td style="background:#eff6ff">${fmt(grand)}</td></tr></tbody></table></div>`;
+  }
+
+  // Electric payment status
+  if (u.electricPayments && u.electricPayments.length) {
+    html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin:18px 0 10px">🔌 电费缴费状态</div><div style="overflow-x:auto"><table><thead><tr><th>月份</th><th>缴费日期</th><th>状态</th></tr></thead><tbody>';
+    u.electricPayments.forEach(p => {
+      const paid = p.status === 'paid';
+      html += `<tr><td>${p.month}月</td><td>${p.payDate || '—'}</td><td>${paid ? '<span style="color:#16a34a;font-weight:600">✓ 已缴</span>' : '<span style="color:#f59e0b;font-weight:600">待缴</span>'}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Water payments
+  if (u.waterPayments && u.waterPayments.length) {
+    html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin:18px 0 10px">💧 水费缴费记录</div><div style="overflow-x:auto"><table><thead><tr><th>月份</th><th>缴费日期</th><th>状态</th><th>付款金额</th><th>账单总额</th><th>附加费</th><th>账单周期</th><th>账单号</th><th>备注</th></tr></thead><tbody>';
+    let totalAmt = 0, totalBill = 0, totalExtra = 0;
+    u.waterPayments.forEach(w => {
+      totalAmt += Number(w.amount) || 0;
+      totalBill += Number(w.totalAmount) || 0;
+      totalExtra += Number(w.extraAmount) || 0;
+      const paid = w.status === 'paid';
+      html += `<tr><td>${w.month}月</td><td>${w.payDate || '—'}</td><td>${paid ? '<span style="color:#16a34a;font-weight:600">✓ 已缴</span>' : '<span style="color:#f59e0b;font-weight:600">待缴</span>'}</td><td>${fmtFull(w.amount)}</td><td>${fmtFull(w.totalAmount)}</td><td>${w.extraAmount ? fmtFull(w.extraAmount) : '<span style="color:#cbd5e1">—</span>'}</td><td>${w.billPeriod || '—'}</td><td>${w.billNo || '—'}</td><td>${w.note || '—'}</td></tr>`;
+    });
+    html += `<tr class="row-total"><td>合计</td><td></td><td></td><td>${fmtFull(totalAmt)}</td><td>${fmtFull(totalBill)}</td><td>${totalExtra ? fmtFull(totalExtra) : '—'}</td><td colspan="3"></td></tr></tbody></table></div>`;
+  }
+
+  document.getElementById('utilitiesContent').innerHTML = html;
+}
+
+function renderTuitionPublic() {
+  const card = document.getElementById('tuitionCard');
+  if (!card) return;
+  const recs = db.tuitionRecords || [];
+  if (!recs.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const sorted = [...recs].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.id || 0) - (a.id || 0));
+  const total = recs.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+
+  // Summary + method breakdown
+  const byMethod = {};
+  recs.forEach(r => {
+    const m = r.method || '其他';
+    byMethod[m] = byMethod[m] || { count: 0, amount: 0 };
+    byMethod[m].count++;
+    byMethod[m].amount += Number(r.amount) || 0;
+  });
+  let html = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+    <div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:8px;padding:12px 18px">
+      <div style="font-size:12px;color:#64748b">共 ${recs.length} 笔 · 收款总额</div>
+      <div style="font-size:24px;font-weight:700;color:#16a34a">${fmtFull(total)}</div>
+    </div>
+  </div>`;
+  html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin-bottom:10px">💰 按缴费方式统计</div><div style="overflow-x:auto"><table><thead><tr><th>缴费方式</th><th>笔数</th><th>金额</th><th>占比</th></tr></thead><tbody>';
+  Object.entries(byMethod).sort((a, b) => b[1].amount - a[1].amount).forEach(([m, v]) => {
+    html += `<tr><td>${m}</td><td>${v.count}</td><td>${fmtFull(v.amount)}</td><td>${total > 0 ? (v.amount / total * 100).toFixed(1) + '%' : '—'}</td></tr>`;
+  });
+  html += `<tr class="row-total"><td>合计</td><td>${recs.length}</td><td>${fmtFull(total)}</td><td>100%</td></tr></tbody></table></div>`;
+
+  // Records
+  html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin:18px 0 10px">📋 收费明细记录</div><div style="overflow-x:auto"><table><thead><tr><th>缴费日期</th><th>学员姓名</th><th>报课类别</th><th>费用</th><th>缴费方式</th><th>备注</th></tr></thead><tbody>';
+  sorted.forEach(r => {
+    html += `<tr><td>${r.date || '—'}</td><td>${r.student || '—'}</td><td>${r.course || '—'}</td><td>${fmtFull(r.amount)}</td><td>${r.method || '—'}</td><td>${r.note || '—'}</td></tr>`;
+  });
+  html += `<tr class="row-total"><td>合计</td><td colspan="2">${recs.length} 笔</td><td>${fmtFull(total)}</td><td colspan="2"></td></tr></tbody></table></div>`;
+
+  document.getElementById('tuitionContent').innerHTML = html;
+}
 
 function fmtTime(t) { return new Date(t).toLocaleString('zh-CN'); }
 
