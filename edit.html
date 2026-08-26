@@ -82,12 +82,34 @@
   .edit-table .cat-name { font-weight: 600; padding: 6px 8px; }
   .edit-table .row-cat td { background: #f8fafc; }
   .edit-table .col-total { background: #eff6ff; font-weight: 700; }
-  .edit-table .col-month-header { min-width: 90px; }
+  .edit-table .col-month-header { min-width: 90px; background: #dbeafe; color: #1e40af; }
   .edit-table .icon-btn { cursor: pointer; border: none; background: none; font-size: 16px; padding: 2px 6px; border-radius: 4px; }
   .edit-table .icon-btn:hover { background: #fee2e2; }
   .edit-table select { padding: 5px 6px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 13px; font-family: inherit; background: #fff; }
   .edit-table select:focus { outline: none; border-color: #1e40af; box-shadow: 0 0 0 2px rgba(30,64,175,0.1); }
   .edit-table input[type="date"] { text-align: left; }
+
+  /* Utilities bright styles */
+  .util-tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .util-tag-szg { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
+  .util-tag-us { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+  tr.row-us-total td { font-weight: 700; background: #fef3c7; color: #92400e; border-top: 2px solid #f59e0b; }
+  tr.row-szg-total td { font-weight: 700; background: #ede9fe; color: #6d28d9; border-top: 2px solid #8b5cf6; }
+  .util-banner { background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%); border: 1px solid #c4b5fd; border-left: 5px solid #7c3aed; border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; font-size: 13px; color: #4c1d95; line-height: 1.7; }
+  .util-banner b { color: #5b21b6; }
+  .util-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .pill-paid { background: #dcfce7; color: #15803d; }
+  .pill-pending { background: #fef3c7; color: #b45309; }
+  .util-h { font-size: 15px; font-weight: 700; margin: 18px 0 10px; padding: 6px 12px; border-radius: 6px; display: flex; align-items: center; }
+  .util-h-elec { background: #dbeafe; color: #1e40af; border-left: 5px solid #2563eb; }
+  .util-h-water { background: #cffafe; color: #0e7490; border-left: 5px solid #0891b2; }
+  .util-stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .util-stat { border-radius: 10px; padding: 12px 18px; min-width: 170px; }
+  .util-stat-label { font-size: 12px; margin-bottom: 4px; }
+  .util-stat-value { font-size: 22px; font-weight: 700; }
+  th.th-month { background: #dbeafe; color: #1e40af; }
+  td.amt-ours { color: #6d28d9; font-weight: 700; }
+  td.amt-extra { color: #ea580c; font-weight: 700; background: #fff7e6; }
 
   /* Modal */
   .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
@@ -259,14 +281,14 @@
 
     <div class="card">
       <h2>
-        <span class="h2-left">⚡ 电费明细（按户号）</span>
+        <span class="h2-left">⚡ 电费明细（按客单号）</span>
         <div style="display:flex;gap:8px">
           <button class="btn btn-sm btn-outline" onclick="addMeterModal()">+ 添加电表</button>
           <button class="btn btn-sm btn-outline" onclick="document.getElementById('utilitiesImportFile').click()">📥 导入水电费JSON</button>
           <input type="file" id="utilitiesImportFile" accept=".json" style="display:none" onchange="importUtilitiesFile(event)">
         </div>
       </h2>
-      <p style="font-size:13px;color:#64748b;margin-bottom:16px">按电表户号录入每月电费（含素斋馆与我方各电表）；修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
+      <p style="font-size:13px;color:#64748b;margin-bottom:16px">按客单号录入每月电费（🟣 素斋馆 / 🔵 我方 各电表）；修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
       <div style="overflow-x:auto"><table class="edit-table" id="electricMatrixTable"></table></div>
     </div>
 
@@ -277,9 +299,13 @@
 
     <div class="card">
       <h2>
-        <span class="h2-left">💧 水费缴费记录</span>
+        <span class="h2-left">💧 水费缴费记录（与素斋馆分摊）</span>
         <button class="btn btn-sm btn-outline" onclick="addWaterModal()">+ 添加水费记录</button>
       </h2>
+      <div class="util-banner">
+        <div style="margin-bottom:6px"><span class="util-pill" style="background:#7c3aed;color:#fff;font-size:13px">💧 素斋馆水费缴费 · 我方固定承担 ₱6,000/月</span></div>
+        <div>水费由<b>我方</b>与<b>素斋馆</b>两方分摊：<b>无论每月水费总额多少，我方固定承担 ₱6,000/月</b>，剩余部分由素斋馆承担；后续如有酌情增加，超出固定份额的部分记入「<b>额外承担</b>」列。</div>
+      </div>
       <div style="overflow-x:auto"><table class="edit-table" id="waterPayTable"></table></div>
     </div>
 
@@ -472,6 +498,10 @@ function fmt(n) {
 function fmtFull(n) {
   const v = Number(n) || 0;
   return '₱' + v.toLocaleString('en-PH', {maximumFractionDigits: 0});
+}
+function fmt2(n) {
+  const v = Number(n) || 0;
+  return '₱' + v.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 function fmtSigned(n) {
   const v = Number(n) || 0;
@@ -733,57 +763,80 @@ function renderUtilitiesPublic() {
     return;
   }
   card.style.display = '';
-  let html = '';
+  const billsOf = acct => (u.electricBills || {})[acct] || {};
+  const meterTotal = mt => UTIL_MONTHS.reduce((a, m) => a + (Number(billsOf(mt.accountNo)[m]) || 0), 0);
+  const groupTotal = owner => (u.meters || []).filter(mt => (mt.owner || '我方') === owner).reduce((a, mt) => a + meterTotal(mt), 0);
+  const elecOurs = groupTotal('我方');
+  const elecSzg = groupTotal('素斋馆');
+  const waterAmt = (u.waterPayments || []).reduce((a, w) => a + (Number(w.amount) || 0), 0);
+  const waterExtra = (u.waterPayments || []).reduce((a, w) => a + (Number(w.extraAmount) || 0), 0);
+
+  // Stats strip (at-a-glance totals)
+  let html = `<div class="util-stats">
+    <div class="util-stat" style="background:#fef3c7;border:1px solid #fcd34d"><div class="util-stat-label" style="color:#92400e">⚡ 我方电费合计</div><div class="util-stat-value" style="color:#b45309">${fmt2(elecOurs)}</div></div>
+    <div class="util-stat" style="background:#ede9fe;border:1px solid #c4b5fd"><div class="util-stat-label" style="color:#6d28d9">⚡ 素斋馆电费合计（参考）</div><div class="util-stat-value" style="color:#6d28d9">${fmt2(elecSzg)}</div></div>
+    <div class="util-stat" style="background:#cffafe;border:1px solid #67e8f9"><div class="util-stat-label" style="color:#0e7490">💧 我方水费累计（固定 ₱6,000/月）</div><div class="util-stat-value" style="color:#0e7490">${fmt2(waterAmt + waterExtra)}</div></div>
+  </div>`;
 
   // Electric bills matrix
   if (u.meters && u.meters.length) {
-    html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin-bottom:10px">⚡ 电费明细（按户号）</div><div style="overflow-x:auto"><table><thead><tr><th>户号 / 归属</th>';
-    UTIL_MONTHS.forEach(m => html += `<th>${m}</th>`);
+    html += '<div class="util-h util-h-elec">⚡ 电费明细（按客单号）<span style="font-weight:400;font-size:12px;margin-left:auto;color:#475569">🟣 素斋馆 · 🔵 我方</span></div><div style="overflow-x:auto"><table><thead><tr><th>客单号</th><th style="text-align:center">电表号</th><th style="text-align:center">UNIT</th><th style="text-align:center">归属</th>';
+    UTIL_MONTHS.forEach(m => html += `<th class="th-month">${m}</th>`);
     html += '<th style="background:#eff6ff">合计</th></tr></thead><tbody>';
-    const billsOf = acct => (u.electricBills || {})[acct] || {};
-    let grand = 0;
     u.meters.forEach(mt => {
       const bills = billsOf(mt.accountNo);
       let total = 0;
-      let row = `<tr><td>${mt.accountNo}<br><span style="font-size:11px;color:#94a3b8">${mt.owner || ''}${mt.unit ? ' · ' + mt.unit : ''}</span></td>`;
+      const isSzg = (mt.owner || '我方') === '素斋馆';
+      let row = `<tr><td style="font-weight:700">${mt.accountNo}</td><td style="text-align:center;color:#64748b">${mt.meterNo || '—'}</td><td style="text-align:center">${mt.unit || '—'}</td><td style="text-align:center"><span class="util-tag ${isSzg ? 'util-tag-szg' : 'util-tag-us'}">${mt.owner || '我方'}</span></td>`;
       UTIL_MONTHS.forEach(m => {
         const v = Number(bills[m]) || 0;
         total += v;
-        row += `<td>${v ? fmtFull(v) : '<span style="color:#cbd5e1">—</span>'}</td>`;
+        row += `<td>${v ? fmt2(v) : '<span style="color:#cbd5e1">—</span>'}</td>`;
       });
-      grand += total;
-      html += row + `<td style="background:#eff6ff;font-weight:700">${fmt(total)}</td></tr>`;
+      html += row + `<td style="background:#eff6ff;font-weight:700;color:#1e40af">${fmt2(total)}</td></tr>`;
     });
-    html += `<tr class="row-total"><td>电费合计</td>`;
+    const groupRow = (label, owner, cls) => {
+      let row = `<tr class="${cls}"><td colspan="4">${label}</td>`;
+      UTIL_MONTHS.forEach(m => {
+        const s = u.meters.filter(mt => (mt.owner || '我方') === owner).reduce((a, mt) => a + (Number(billsOf(mt.accountNo)[m]) || 0), 0);
+        row += `<td>${s ? fmt2(s) : '<span style="opacity:.5">—</span>'}</td>`;
+      });
+      return row + `<td>${fmt2(groupTotal(owner))}</td></tr>`;
+    };
+    html += groupRow('我方合计金额', '我方', 'row-us-total');
+    html += groupRow('素斋馆合计（参考）', '素斋馆', 'row-szg-total');
+    html += `<tr class="row-total"><td colspan="4">电费总计</td>`;
     UTIL_MONTHS.forEach(m => {
       const s = u.meters.reduce((a, mt) => a + (Number(billsOf(mt.accountNo)[m]) || 0), 0);
-      html += `<td>${s ? fmt(s) : '<span style="color:#cbd5e1">—</span>'}</td>`;
+      html += `<td>${s ? fmt2(s) : '<span style="opacity:.5">—</span>'}</td>`;
     });
-    html += `<td style="background:#eff6ff">${fmt(grand)}</td></tr></tbody></table></div>`;
+    html += `<td style="background:#eff6ff">${fmt2(elecOurs + elecSzg)}</td></tr></tbody></table></div>`;
   }
 
   // Electric payment status
   if (u.electricPayments && u.electricPayments.length) {
-    html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin:18px 0 10px">🔌 电费缴费状态</div><div style="overflow-x:auto"><table><thead><tr><th>月份</th><th>缴费日期</th><th>状态</th></tr></thead><tbody>';
+    html += '<div class="util-h" style="background:#dcfce7;color:#166534;border-left:5px solid #16a34a">🔌 电费缴费状态</div><div style="overflow-x:auto"><table><thead><tr><th>月份</th><th>缴费日期</th><th style="text-align:center">状态</th></tr></thead><tbody>';
     u.electricPayments.forEach(p => {
       const paid = p.status === 'paid';
-      html += `<tr><td>${p.month}月</td><td>${p.payDate || '—'}</td><td>${paid ? '<span style="color:#16a34a;font-weight:600">✓ 已缴</span>' : '<span style="color:#f59e0b;font-weight:600">待缴</span>'}</td></tr>`;
+      html += `<tr><td>${p.month}月</td><td>${p.payDate || '—'}</td><td style="text-align:center">${paid ? '<span class="util-pill pill-paid">✓ 已缴</span>' : '<span class="util-pill pill-pending">待缴</span>'}</td></tr>`;
     });
     html += '</tbody></table></div>';
   }
 
   // Water payments
   if (u.waterPayments && u.waterPayments.length) {
-    html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin:18px 0 10px">💧 水费缴费记录</div><div style="overflow-x:auto"><table><thead><tr><th>月份</th><th>缴费日期</th><th>状态</th><th>付款金额</th><th>账单总额</th><th>附加费</th><th>账单周期</th><th>账单号</th><th>备注</th></tr></thead><tbody>';
-    let totalAmt = 0, totalBill = 0, totalExtra = 0;
+    html += '<div class="util-h util-h-water">💧 水费缴费记录（与素斋馆分摊）</div>'
+      + '<div class="util-banner"><div style="margin-bottom:6px"><span class="util-pill" style="background:#7c3aed;color:#fff;font-size:13px">💧 素斋馆水费缴费 · 我方固定承担 ₱6,000/月</span></div>'
+      + '<div>水费由<b>我方</b>与<b>素斋馆</b>两方分摊：<b>无论每月水费总额多少，我方固定承担 ₱6,000/月</b>，剩余部分由素斋馆承担；后续如有酌情增加，超出固定份额的部分记入「<b>额外承担</b>」列。</div></div>'
+      + '<div style="overflow-x:auto"><table><thead><tr><th>月份</th><th>缴费日期</th><th>我方缴费</th><th>额外承担</th><th>合计我方</th><th>水费单号</th><th>帐单周期</th><th>总水费</th><th style="text-align:center">状态</th><th>备注</th></tr></thead><tbody>';
+    let totalBill = 0;
     u.waterPayments.forEach(w => {
-      totalAmt += Number(w.amount) || 0;
+      const extra = Number(w.extraAmount) || 0;
       totalBill += Number(w.totalAmount) || 0;
-      totalExtra += Number(w.extraAmount) || 0;
       const paid = w.status === 'paid';
-      html += `<tr><td>${w.month}月</td><td>${w.payDate || '—'}</td><td>${paid ? '<span style="color:#16a34a;font-weight:600">✓ 已缴</span>' : '<span style="color:#f59e0b;font-weight:600">待缴</span>'}</td><td>${fmtFull(w.amount)}</td><td>${fmtFull(w.totalAmount)}</td><td>${w.extraAmount ? fmtFull(w.extraAmount) : '<span style="color:#cbd5e1">—</span>'}</td><td>${w.billPeriod || '—'}</td><td>${w.billNo || '—'}</td><td>${w.note || '—'}</td></tr>`;
+      html += `<tr><td>${w.month}月</td><td>${w.payDate || '—'}</td><td class="amt-ours">${fmt2(w.amount)}</td><td class="amt-extra">${extra ? fmt2(extra) : '<span style="color:#cbd5e1">—</span>'}</td><td class="amt-ours" style="background:#f5f3ff">${fmt2((Number(w.amount) || 0) + extra)}</td><td>${w.billNo || '—'}</td><td>${w.billPeriod || '—'}</td><td>${fmt2(w.totalAmount)}</td><td style="text-align:center">${paid ? '<span class="util-pill pill-paid">✓ 已缴</span>' : '<span class="util-pill pill-pending">待缴</span>'}</td><td>${w.note || '—'}</td></tr>`;
     });
-    html += `<tr class="row-total"><td>合计</td><td></td><td></td><td>${fmtFull(totalAmt)}</td><td>${fmtFull(totalBill)}</td><td>${totalExtra ? fmtFull(totalExtra) : '—'}</td><td colspan="3"></td></tr></tbody></table></div>`;
+    html += `<tr class="row-total"><td>累计</td><td></td><td style="color:#6d28d9">${fmt2(waterAmt)}</td><td style="color:#ea580c">${waterExtra ? fmt2(waterExtra) : '—'}</td><td style="color:#6d28d9">${fmt2(waterAmt + waterExtra)}</td><td></td><td></td><td>${fmt2(totalBill)}</td><td></td><td></td></tr></tbody></table></div>`;
   }
 
   document.getElementById('utilitiesContent').innerHTML = html;
@@ -1121,30 +1174,37 @@ function renderUtilities() {
 
 function renderElectricMatrix() {
   const u = getUtilities();
-  let html = `<thead><tr><th style="min-width:140px">户号 / 归属</th>${UTIL_MONTHS.map(m => `<th class="col-month-header">${m}</th>`).join('')}<th style="background:#eff6ff">合计</th></tr></thead><tbody>`;
+  let html = `<thead><tr><th style="min-width:120px">客单号</th><th style="min-width:110px;text-align:center">电表号</th><th style="text-align:center">UNIT</th><th style="text-align:center">归属</th>${UTIL_MONTHS.map(m => `<th class="col-month-header">${m}</th>`).join('')}<th style="background:#eff6ff">合计</th></tr></thead><tbody>`;
   if (!u.meters.length) {
-    html += `<tr><td colspan="14" style="text-align:center;color:#94a3b8;padding:20px">暂无电表，点右上角「+ 添加电表」或「导入水电费JSON」</td></tr>`;
+    html += `<tr><td colspan="17" style="text-align:center;color:#94a3b8;padding:20px">暂无电表，点右上角「+ 添加电表」或「导入水电费JSON」</td></tr>`;
   }
   u.meters.forEach((mt, i) => {
     const bills = (u.electricBills || {})[mt.accountNo] || {};
     const total = UTIL_MONTHS.reduce((a, m) => a + (Number(bills[m]) || 0), 0);
-    html += `<tr class="row-cat"><td class="cat-name">${mt.accountNo}<button class="icon-btn" onclick="deleteMeter(${i})" title="删除" style="margin-left:4px">✕</button><br><span style="font-size:11px;color:#94a3b8;font-weight:400">${mt.owner || ''}${mt.unit ? ' · ' + mt.unit : ''}</span></td>`;
+    const isSzg = (mt.owner || '我方') === '素斋馆';
+    html += `<tr class="row-cat"><td class="cat-name">${mt.accountNo}<button class="icon-btn" onclick="deleteMeter(${i})" title="删除" style="margin-left:4px">✕</button></td><td style="text-align:center;color:#64748b">${mt.meterNo || '—'}</td><td style="text-align:center">${mt.unit || '—'}</td><td style="text-align:center"><span class="util-tag ${isSzg ? 'util-tag-szg' : 'util-tag-us'}">${mt.owner || '我方'}</span></td>`;
     UTIL_MONTHS.forEach(m => {
       html += `<td><input type="number" value="${bills[m] || ''}" placeholder="0" oninput="updateElectricBill(${i},'${m}',this.value)"></td>`;
     });
-    html += `<td class="col-total">${fmt(total)}</td></tr>`;
+    html += `<td class="col-total">${fmt2(total)}</td></tr>`;
   });
   if (u.meters.length) {
-    html += `<tr class="row-total"><td>电费合计</td>`;
+    const groupSum = (owner, m) => u.meters.filter(mt => (mt.owner || '我方') === owner).reduce((a, mt) => a + (Number(((u.electricBills || {})[mt.accountNo] || {})[m]) || 0), 0);
+    const mkGroupRow = (label, owner, cls) => {
+      let row = `<tr class="${cls}"><td colspan="4">${label}</td>`;
+      UTIL_MONTHS.forEach(m => { const s = groupSum(owner, m); row += `<td>${s ? fmt2(s) : '<span style="opacity:.5">—</span>'}</td>`; });
+      let g = 0; UTIL_MONTHS.forEach(m => g += groupSum(owner, m));
+      return row + `<td>${fmt2(g)}</td></tr>`;
+    };
+    html += mkGroupRow('我方合计金额', '我方', 'row-us-total');
+    html += mkGroupRow('素斋馆合计（参考）', '素斋馆', 'row-szg-total');
+    html += `<tr class="row-total"><td colspan="4">电费总计</td>`;
     UTIL_MONTHS.forEach(m => {
-      const s = u.meters.reduce((a, mt) => a + (Number(((u.electricBills || {})[mt.accountNo] || {})[m]) || 0), 0);
-      html += `<td>${fmt(s)}</td>`;
+      const s = groupSum('我方', m) + groupSum('素斋馆', m);
+      html += `<td>${s ? fmt2(s) : '<span style="opacity:.5">—</span>'}</td>`;
     });
-    const grand = u.meters.reduce((a, mt) => {
-      const b = (u.electricBills || {})[mt.accountNo] || {};
-      return a + UTIL_MONTHS.reduce((x, m) => x + (Number(b[m]) || 0), 0);
-    }, 0);
-    html += `<td style="background:#eff6ff">${fmt(grand)}</td></tr>`;
+    let grand = 0; UTIL_MONTHS.forEach(m => grand += groupSum('我方', m) + groupSum('素斋馆', m));
+    html += `<td style="background:#eff6ff">${fmt2(grand)}</td></tr>`;
   }
   html += '</tbody>';
   document.getElementById('electricMatrixTable').innerHTML = html;
@@ -1170,21 +1230,24 @@ function updateElectricTotals(meterIdx) {
   const row = catRows[meterIdx];
   if (row && u.meters[meterIdx]) {
     const bills = (u.electricBills || {})[u.meters[meterIdx].accountNo] || {};
-    row.querySelector('.col-total').innerHTML = fmt(UTIL_MONTHS.reduce((a, m) => a + (Number(bills[m]) || 0), 0));
+    row.querySelector('.col-total').innerHTML = fmt2(UTIL_MONTHS.reduce((a, m) => a + (Number(bills[m]) || 0), 0));
   }
-  const totalRow = table.querySelector('tbody tr.row-total');
-  if (totalRow) {
-    const tds = totalRow.querySelectorAll('td');
+  const groupSum = (owner, m) => u.meters.filter(mt => (mt.owner || '我方') === owner).reduce((a, mt) => a + (Number(((u.electricBills || {})[mt.accountNo] || {})[m]) || 0), 0);
+  const setRow = (cls, valOf) => {
+    const tr = table.querySelector('tbody tr.' + cls);
+    if (!tr) return;
+    const tds = tr.querySelectorAll('td');
+    let g = 0;
     UTIL_MONTHS.forEach((m, i) => {
-      const s = u.meters.reduce((a, mt) => a + (Number(((u.electricBills || {})[mt.accountNo] || {})[m]) || 0), 0);
-      if (tds[i + 1]) tds[i + 1].innerHTML = fmt(s);
+      const v = valOf(m);
+      g += v;
+      if (tds[i + 1]) tds[i + 1].innerHTML = v ? fmt2(v) : '<span style="opacity:.5">—</span>';
     });
-    const grand = u.meters.reduce((a, mt) => {
-      const b = (u.electricBills || {})[mt.accountNo] || {};
-      return a + UTIL_MONTHS.reduce((x, m) => x + (Number(b[m]) || 0), 0);
-    }, 0);
-    if (tds[tds.length - 1]) tds[tds.length - 1].innerHTML = fmt(grand);
-  }
+    if (tds[tds.length - 1]) tds[tds.length - 1].innerHTML = fmt2(g);
+  };
+  setRow('row-us-total', m => groupSum('我方', m));
+  setRow('row-szg-total', m => groupSum('素斋馆', m));
+  setRow('row-total', m => groupSum('我方', m) + groupSum('素斋馆', m));
 }
 
 function renderElectricPayTable() {
@@ -1225,8 +1288,8 @@ function addMeterModal() {
   modal.innerHTML = `
     <h3>添加电表</h3>
     <div class="form-row">
-      <div class="form-group"><label>户号</label><input id="mt_account" placeholder="如 2124051344"></div>
-      <div class="form-group"><label>表号</label><input id="mt_meter_no" placeholder="如 122BAC107668"></div>
+      <div class="form-group"><label>客单号</label><input id="mt_account" placeholder="如 2124051344"></div>
+      <div class="form-group"><label>电表号</label><input id="mt_meter_no" placeholder="如 122BAC107668"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>单元</label><input id="mt_unit" placeholder="如 J / F（可空）"></div>
@@ -1243,9 +1306,9 @@ function addMeterModal() {
 
 function confirmAddMeter() {
   const accountNo = document.getElementById('mt_account').value.trim();
-  if (!accountNo) { showToast('请输入户号'); return; }
+  if (!accountNo) { showToast('请输入客单号'); return; }
   const u = getUtilities();
-  if (u.meters.some(m => m.accountNo === accountNo)) { showToast('该户号已存在'); return; }
+  if (u.meters.some(m => m.accountNo === accountNo)) { showToast('该客单号已存在'); return; }
   u.meters.push({
     id: Date.now(),
     accountNo,
@@ -1274,20 +1337,21 @@ function deleteMeter(idx) {
 
 function renderWaterPayTable() {
   const u = getUtilities();
-  let html = `<thead><tr><th>月份</th><th>缴费日期</th><th>付款金额</th><th>状态</th><th>账单号</th><th>账单周期</th><th>账单总额</th><th>附加费</th><th>备注</th><th></th></tr></thead><tbody>`;
+  let html = `<thead><tr><th>月份</th><th>缴费日期</th><th>我方缴费</th><th style="background:#fff7e6">额外承担</th><th>合计我方</th><th>水费单号</th><th>帐单周期</th><th>总水费</th><th>状态</th><th>备注</th><th></th></tr></thead><tbody>`;
   if (!u.waterPayments.length) {
-    html += `<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:20px">暂无水费记录，点右上角「+ 添加水费记录」</td></tr>`;
+    html += `<tr><td colspan="11" style="text-align:center;color:#94a3b8;padding:20px">暂无水费记录，点右上角「+ 添加水费记录」</td></tr>`;
   }
   u.waterPayments.forEach(w => {
     html += `<tr>
       <td><select onchange="updateWaterPay(${w.id},'month',this.value)">${UTIL_MONTHS.map((m, i) => `<option value="${i + 1}" ${Number(w.month) === i + 1 ? 'selected' : ''}>${m}</option>`).join('')}</select></td>
       <td><input type="date" value="${w.payDate || ''}" onchange="updateWaterPay(${w.id},'payDate',this.value)"></td>
-      <td><input type="number" value="${w.amount || ''}" placeholder="0" oninput="updateWaterPay(${w.id},'amount',this.value)"></td>
-      <td><select onchange="updateWaterPay(${w.id},'status',this.value)"><option value="pending" ${w.status !== 'paid' ? 'selected' : ''}>待缴</option><option value="paid" ${w.status === 'paid' ? 'selected' : ''}>已缴</option></select></td>
+      <td><input type="number" value="${w.amount || ''}" placeholder="6000" style="color:#6d28d9;font-weight:700" oninput="updateWaterPay(${w.id},'amount',this.value)"></td>
+      <td style="background:#fff7e6"><input type="number" value="${w.extraAmount || ''}" placeholder="0" style="color:#ea580c;font-weight:700" oninput="updateWaterPay(${w.id},'extraAmount',this.value)"></td>
+      <td style="color:#6d28d9;font-weight:700">${fmt2((Number(w.amount) || 0) + (Number(w.extraAmount) || 0))}</td>
       <td><input type="text" value="${w.billNo || ''}" oninput="updateWaterPay(${w.id},'billNo',this.value)"></td>
       <td><input type="text" value="${w.billPeriod || ''}" placeholder="如 2026.1.16-2.16" oninput="updateWaterPay(${w.id},'billPeriod',this.value)"></td>
       <td><input type="number" value="${w.totalAmount || ''}" placeholder="0" oninput="updateWaterPay(${w.id},'totalAmount',this.value)"></td>
-      <td><input type="number" value="${w.extraAmount || ''}" placeholder="0" oninput="updateWaterPay(${w.id},'extraAmount',this.value)"></td>
+      <td><select onchange="updateWaterPay(${w.id},'status',this.value)"><option value="pending" ${w.status !== 'paid' ? 'selected' : ''}>待缴</option><option value="paid" ${w.status === 'paid' ? 'selected' : ''}>已缴</option></select></td>
       <td><input type="text" value="${w.note || ''}" oninput="updateWaterPay(${w.id},'note',this.value)"></td>
       <td><button class="icon-btn" onclick="deleteWaterPay(${w.id})" title="删除">✕</button></td>
     </tr>`;
@@ -1296,7 +1360,7 @@ function renderWaterPayTable() {
     const ta = u.waterPayments.reduce((a, w) => a + (Number(w.amount) || 0), 0);
     const tt = u.waterPayments.reduce((a, w) => a + (Number(w.totalAmount) || 0), 0);
     const te = u.waterPayments.reduce((a, w) => a + (Number(w.extraAmount) || 0), 0);
-    html += `<tr class="row-total"><td>合计</td><td></td><td>${fmt(ta)}</td><td></td><td></td><td></td><td>${fmt(tt)}</td><td>${fmt(te)}</td><td></td><td></td></tr>`;
+    html += `<tr class="row-total"><td>累计</td><td></td><td style="color:#6d28d9">${fmt2(ta)}</td><td style="color:#ea580c">${te ? fmt2(te) : '—'}</td><td style="color:#6d28d9">${fmt2(ta + te)}</td><td></td><td></td><td>${fmt2(tt)}</td><td></td><td></td><td></td></tr>`;
   }
   html += '</tbody>';
   document.getElementById('waterPayTable').innerHTML = html;
@@ -1328,9 +1392,10 @@ function updateWaterTotals() {
   const ta = u.waterPayments.reduce((a, w) => a + (Number(w.amount) || 0), 0);
   const tt = u.waterPayments.reduce((a, w) => a + (Number(w.totalAmount) || 0), 0);
   const te = u.waterPayments.reduce((a, w) => a + (Number(w.extraAmount) || 0), 0);
-  if (tds[2]) tds[2].innerHTML = fmt(ta);
-  if (tds[6]) tds[6].innerHTML = fmt(tt);
-  if (tds[7]) tds[7].innerHTML = fmt(te);
+  if (tds[2]) tds[2].innerHTML = fmt2(ta);
+  if (tds[3]) tds[3].innerHTML = te ? fmt2(te) : '—';
+  if (tds[4]) tds[4].innerHTML = fmt2(ta + te);
+  if (tds[7]) tds[7].innerHTML = fmt2(tt);
 }
 
 function addWaterModal() {
@@ -1346,16 +1411,16 @@ function addWaterModal() {
       <div class="form-group"><label>缴费日期</label><input id="wp_payDate" type="date"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>付款金额（₱）</label><input id="wp_amount" type="number" placeholder="0"></div>
+      <div class="form-group"><label>我方缴费（₱）</label><input id="wp_amount" type="number" placeholder="6000"></div>
       <div class="form-group"><label>状态</label><select id="wp_status"><option value="paid">已缴</option><option value="pending">待缴</option></select></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>账单号</label><input id="wp_billNo" placeholder="可空"></div>
-      <div class="form-group"><label>账单周期</label><input id="wp_billPeriod" placeholder="如 2026.1.16-2.16"></div>
+      <div class="form-group"><label>水费单号</label><input id="wp_billNo" placeholder="可空"></div>
+      <div class="form-group"><label>帐单周期</label><input id="wp_billPeriod" placeholder="如 2026.1.16-2.16"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>账单总额（₱）</label><input id="wp_totalAmount" type="number" placeholder="0"></div>
-      <div class="form-group"><label>附加费（₱）</label><input id="wp_extraAmount" type="number" placeholder="0"></div>
+      <div class="form-group"><label>总水费（₱）</label><input id="wp_totalAmount" type="number" placeholder="0"></div>
+      <div class="form-group"><label>额外承担（₱）</label><input id="wp_extraAmount" type="number" placeholder="超出固定 ₱6,000 的部分"></div>
     </div>
     <div class="form-group"><label>备注</label><input id="wp_note" placeholder="可空"></div>
     <div class="modal-actions">
