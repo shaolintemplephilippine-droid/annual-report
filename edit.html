@@ -326,6 +326,7 @@
         <button class="btn btn-sm btn-outline" onclick="tuitionModal()">+ 添加缴费记录</button>
       </h2>
       <div id="tuitionSummary"></div>
+      <div id="tuitionMonthlySummary" style="margin-bottom:14px"></div>
       <div style="overflow-x:auto"><table class="edit-table" id="tuitionTable"></table></div>
       <p style="font-size:12px;color:#94a3b8;margin-top:12px">💡 缴费方式支持：现金 / 银行转账 / gcash / 微信 / 支付宝 / 支票 / 其他。修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
     </div>
@@ -1729,7 +1730,45 @@ function getTuitionRecords() {
 
 function renderTuition() {
   renderTuitionSummary();
+  renderTuitionMonthlySummary();
   renderTuitionTable();
+}
+
+function renderTuitionMonthlySummary() {
+  const el = document.getElementById('tuitionMonthlySummary');
+  if (!el) return;
+  const recs = getTuitionRecords();
+  if (!recs.length) { el.innerHTML = ''; return; }
+  const map = {};
+  recs.forEach(r => {
+    const label = getMonthLabelFromDate(r.date);
+    if (!label) return;
+    if (!map[label]) map[label] = { count: 0, amount: 0 };
+    map[label].count++;
+    map[label].amount += Number(r.amount) || 0;
+  });
+  const labels = Object.keys(map).sort((a, b) => {
+    const ma = parseInt(a, 10) || 0;
+    const mb = parseInt(b, 10) || 0;
+    return ma - mb;
+  });
+  if (!labels.length) { el.innerHTML = ''; return; }
+  const rows = labels.map(label => {
+    const item = map[label];
+    return `<tr><td>${label}</td><td>${item.count} 笔</td><td style="text-align:right;font-weight:600;color:#16a34a">${fmtFull(item.amount)}</td></tr>`;
+  }).join('');
+  const total = labels.reduce((a, label) => a + map[label].amount, 0);
+  el.innerHTML = `
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px">
+      <div style="font-size:14px;font-weight:600;color:#1e293b;margin-bottom:10px">📅 武术费月度统计</div>
+      <div style="overflow-x:auto">
+        <table class="edit-table" style="margin:0">
+          <thead><tr><th>月份</th><th>缴费笔数</th><th style="text-align:right">当月收入</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr style="background:#f0fdf4;font-weight:700"><td>合计</td><td>${recs.length} 笔</td><td style="text-align:right;color:#16a34a">${fmtFull(total)}</td></tr></tfoot>
+        </table>
+      </div>
+    </div>`;
 }
 
 function renderTuitionSummary() {
