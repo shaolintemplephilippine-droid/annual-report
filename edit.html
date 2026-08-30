@@ -882,11 +882,11 @@ function renderTuitionByMonth() {
     const amount = (m.income && m.income['武术学费']) || 0;
     return `<tr><td>${m.label}</td><td style="text-align:right">${fmtFull(amount)}</td></tr>`;
   }).join('');
-  document.getElementById('tuitionMonthContent').innerHTML = '
+  document.getElementById('tuitionMonthContent').innerHTML = `
     <div style="overflow-x:auto"><table>
       <thead><tr><th>月份</th><th style="text-align:right">武术学费</th></tr></thead>
-      <tbody>' + rows + '</tbody>
-    </table></div>';
+      <tbody>${rows}</tbody>
+    </table></div>`;
 }
 
 function renderTuitionPublic() {
