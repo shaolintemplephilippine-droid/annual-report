@@ -208,6 +208,11 @@
       <div id="tuitionContent"></div>
     </div>
 
+    <div class="card" id="tuitionMonthCard" style="display:none">
+      <h2><span class="h2-left">🥋 武术费月度统计</span></h2>
+      <div id="tuitionMonthContent"></div>
+    </div>
+
   </div>
 
 
@@ -383,6 +388,29 @@ function fmt2(n) {
   const v = Number(n) || 0;
   return '₱' + v.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
+
+function getMonthLabelFromDate(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return (d.getMonth() + 1) + '月';
+}
+
+function syncTuitionToMonths() {
+  if (!db.months || !db.tuitionRecords) return;
+  const monthMap = {};
+  db.months.forEach((m, idx) => { monthMap[m.label] = idx; });
+  db.months.forEach(m => {
+    if (!m.income) m.income = {};
+    m.income['武术学费'] = 0;
+  });
+  db.tuitionRecords.forEach(r => {
+    const label = getMonthLabelFromDate(r.date);
+    if (label && monthMap[label] !== undefined) {
+      db.months[monthMap[label]].income['武术学费'] += Number(r.amount) || 0;
+    }
+  });
+}
 function fmtSigned(n) {
   const v = Number(n) || 0;
   const sign = v < 0 ? '-' : '';
@@ -501,6 +529,7 @@ function renderReport() {
   // Utilities & tuition detail cards
   renderUtilitiesPublic();
   renderTuitionPublic();
+  renderTuitionByMonth();
 }
 
 function renderFindings(totalIncome, totalExpense, totalProfit, profitArr, labels, months) {
@@ -709,6 +738,24 @@ function renderUtilitiesPublic() {
   document.getElementById('utilitiesContent').innerHTML = html;
 }
 
+function renderTuitionByMonth() {
+  const card = document.getElementById('tuitionMonthCard');
+  if (!card) return;
+  const months = db.months || [];
+  const hasData = months.some(m => m.income && m.income['武术学费']);
+  if (!hasData) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const rows = months.map(m => {
+    const amount = (m.income && m.income['武术学费']) || 0;
+    return `<tr><td>${m.label}</td><td style="text-align:right">${fmtFull(amount)}</td></tr>`;
+  }).join('');
+  document.getElementById('tuitionMonthContent').innerHTML = '
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>月份</th><th style="text-align:right">武术学费</th></tr></thead>
+      <tbody>' + rows + '</tbody>
+    </table></div>';
+}
+
 function renderTuitionPublic() {
   const card = document.getElementById('tuitionCard');
   if (!card) return;
@@ -766,6 +813,7 @@ async function syncFromCloud(silent) {
     const localTime = db.updatedAt || 0;
     if (remoteTime > localTime) {
       db = remote;
+      syncTuitionToMonths();
       persistDb();
       renderReport();
       if (!silent) showToast('已同步云端最新数据');

@@ -243,6 +243,11 @@
       <div id="tuitionContent"></div>
     </div>
 
+    <div class="card" id="tuitionMonthCard" style="display:none">
+      <h2><span class="h2-left">🥋 武术费月度统计</span></h2>
+      <div id="tuitionMonthContent"></div>
+    </div>
+
   </div>
 
   <!-- ============ Edit Panel ============ -->
@@ -503,6 +508,29 @@ function fmt2(n) {
   const v = Number(n) || 0;
   return '₱' + v.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
+
+function getMonthLabelFromDate(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return (d.getMonth() + 1) + '月';
+}
+
+function syncTuitionToMonths() {
+  if (!db.months || !db.tuitionRecords) return;
+  const monthMap = {};
+  db.months.forEach((m, idx) => { monthMap[m.label] = idx; });
+  db.months.forEach(m => {
+    if (!m.income) m.income = {};
+    m.income['武术学费'] = 0;
+  });
+  db.tuitionRecords.forEach(r => {
+    const label = getMonthLabelFromDate(r.date);
+    if (label && monthMap[label] !== undefined) {
+      db.months[monthMap[label]].income['武术学费'] += Number(r.amount) || 0;
+    }
+  });
+}
 function fmtSigned(n) {
   const v = Number(n) || 0;
   const sign = v < 0 ? '-' : '';
@@ -633,6 +661,7 @@ function renderReport() {
   // Utilities & tuition detail cards
   renderUtilitiesPublic();
   renderTuitionPublic();
+  renderTuitionByMonth();
 }
 
 function renderFindings(totalIncome, totalExpense, totalProfit, profitArr, labels, months) {
@@ -840,6 +869,24 @@ function renderUtilitiesPublic() {
   }
 
   document.getElementById('utilitiesContent').innerHTML = html;
+}
+
+function renderTuitionByMonth() {
+  const card = document.getElementById('tuitionMonthCard');
+  if (!card) return;
+  const months = db.months || [];
+  const hasData = months.some(m => m.income && m.income['武术学费']);
+  if (!hasData) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const rows = months.map(m => {
+    const amount = (m.income && m.income['武术学费']) || 0;
+    return `<tr><td>${m.label}</td><td style="text-align:right">${fmtFull(amount)}</td></tr>`;
+  }).join('');
+  document.getElementById('tuitionMonthContent').innerHTML = '
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>月份</th><th style="text-align:right">武术学费</th></tr></thead>
+      <tbody>' + rows + '</tbody>
+    </table></div>';
 }
 
 function renderTuitionPublic() {
@@ -1539,6 +1586,7 @@ async function syncFromCloud() {
         if (!useRemote) { baseUpdatedAt = Math.max(baseUpdatedAt, remoteTime); return; }
       }
       db = remote;
+      syncTuitionToMonths();
       persistDb();
       localStorage.setItem(LAST_SYNC_KEY, String(remoteTime));
       baseUpdatedAt = remoteTime;
@@ -1716,15 +1764,19 @@ function saveTuition() {
     showToast('已添加缴费记录，记得保存到云端');
   }
   saveData();
+  syncTuitionToMonths();
   document.querySelector('.modal-overlay').remove();
   renderTuition();
+  renderReport();
 }
 
 function deleteTuition(id) {
   if (!confirm('确认删除这条缴费记录？')) return;
   db.tuitionRecords = getTuitionRecords().filter(r => r.id !== id);
   saveData();
+  syncTuitionToMonths();
   renderTuition();
+  renderReport();
   showToast('已删除');
 }
 
