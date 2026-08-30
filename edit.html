@@ -260,6 +260,7 @@
           <button class="btn btn-sm btn-outline" onclick="addMonthModal()">+ 添加月份</button>
           <button class="btn btn-sm btn-outline" onclick="addCatModal('expense')">+ 支出项目</button>
           <button class="btn btn-sm btn-outline" onclick="addCatModal('income')">+ 收入项目</button>
+          <button class="btn btn-sm btn-success" onclick="batchSetTuitionModal()">🥋 批量设置武术学费</button>
         </div>
       </h2>
       <p style="font-size:13px;color:#64748b;margin-bottom:16px">直接在表格中修改金额，数据自动保存在本机；点下方「☁️ 保存到云端」后，所有设备立即同步。</p>
@@ -1156,6 +1157,54 @@ function deleteCat(type, cat) {
   saveData();
   renderEditTable();
   showToast('已删除');
+}
+
+// ===================== Batch Tuition Setup =====================
+function batchSetTuitionModal() {
+  const months = db.months || [];
+  if (months.length === 0) { showToast('请先添加月份'); return; }
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const monthOptions = months.map((m, i) => `<option value="${i}">${m.label}</option>`).join('');
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>批量设置武术学费</h3>
+      <p style="font-size:13px;color:#64748b;margin-bottom:12px">为选定的月份统一填入武术学费金额，直接计入当月收入。</p>
+      <div class="form-group"><label>每月学费金额（₱）</label><input id="bt_amount" type="number" placeholder="例如 3000" value=""></div>
+      <div class="form-group"><label>起始月份</label><select id="bt_start">${monthOptions}</select></div>
+      <div class="form-group"><label>结束月份</label><select id="bt_end">${monthOptions}</select></div>
+      <div class="form-group"><label><input type="checkbox" id="bt_overwrite" checked> 覆盖已有数据</label></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="document.querySelector('.modal-overlay').remove()">取消</button>
+        <button class="btn btn-primary" onclick="applyBatchTuition()">应用</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('bt_end').selectedIndex = months.length - 1;
+  document.getElementById('bt_amount').focus();
+}
+
+function applyBatchTuition() {
+  const amount = parseFloat(document.getElementById('bt_amount').value) || 0;
+  const startIdx = parseInt(document.getElementById('bt_start').value, 10);
+  const endIdx = parseInt(document.getElementById('bt_end').value, 10);
+  const overwrite = document.getElementById('bt_overwrite').checked;
+  if (amount <= 0) { showToast('请输入有效金额'); return; }
+  if (startIdx > endIdx) { showToast('起始月份不能晚于结束月份'); return; }
+  if (!db.incomeCats.includes('武术学费')) db.incomeCats.push('武术学费');
+  let count = 0;
+  for (let i = startIdx; i <= endIdx; i++) {
+    const m = db.months[i];
+    if (!m.income) m.income = {};
+    if (!overwrite && m.income['武术学费']) continue;
+    m.income['武术学费'] = amount;
+    count++;
+  }
+  saveData();
+  renderEditTable();
+  document.querySelector('.modal-overlay').remove();
+  showToast(`已设置 ${count} 个月份的武术学费`);
 }
 
 // ===================== Data Management =====================
