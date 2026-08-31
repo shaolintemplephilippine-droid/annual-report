@@ -784,6 +784,7 @@ function renderDetailTable(labels) {
 // ===================== Utilities & Tuition (report view) =====================
 const UTIL_MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const PAY_METHODS = ['现金','银行转账','gcash','微信','支付宝','支票','其他'];
+const BANK_ACCOUNTS = ['AUB公账','AUB个人'];
 
 function renderUtilitiesPublic() {
   const card = document.getElementById('utilitiesCard');
@@ -1776,7 +1777,8 @@ function renderTuitionSummary() {
   const total = recs.reduce((a, r) => a + (Number(r.amount) || 0), 0);
   const byMethod = {};
   recs.forEach(r => {
-    const m = r.method || '其他';
+    let m = r.method || '其他';
+    if (m === '银行转账' && r.account) m = `银行转账（${r.account}）`;
     byMethod[m] = (byMethod[m] || 0) + (Number(r.amount) || 0);
   });
   const chips = PAY_METHODS.filter(m => byMethod[m]).map(m => `<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border-radius:999px;padding:4px 12px;font-size:12px;color:#475569;margin:2px 4px 2px 0">${m} <b style="color:#16a34a">${fmtFull(byMethod[m])}</b></span>`).join('');
@@ -1803,7 +1805,7 @@ function renderTuitionTable() {
       <td>${escAttr(r.student) || '—'}</td>
       <td>${escAttr(r.course) || '—'}</td>
       <td>${fmtFull(r.amount)}</td>
-      <td>${escAttr(r.method) || '—'}</td>
+      <td>${escAttr(r.method) || '—'}${r.method === '银行转账' && r.account ? '<br><span style="font-size:12px;color:#64748b">' + escAttr(r.account) + '</span>' : ''}</td>
       <td>${escAttr(r.note) || '—'}</td>
       <td><button class="icon-btn" onclick="tuitionModal(${r.id})" title="编辑" style="color:#1e40af">✎</button><button class="icon-btn" onclick="deleteTuition(${r.id})" title="删除">✕</button></td>
     </tr>`;
@@ -1835,7 +1837,8 @@ function tuitionModal(id) {
       </div>
       <div class="form-group"><label>费用（₱）</label><input id="tu_amount" type="number" value="${rec ? rec.amount || '' : ''}" placeholder="0"></div>
     </div>
-    <div class="form-group"><label>缴费方式</label><select id="tu_method">${PAY_METHODS.map(m => `<option value="${m}" ${rec && rec.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
+    <div class="form-group"><label>缴费方式</label><select id="tu_method" onchange="toggleBankAccount()">${PAY_METHODS.map(m => `<option value="${m}" ${rec && rec.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
+    <div class="form-group" id="tu_account_group" style="display:none"><label>银行账户</label><select id="tu_account">${BANK_ACCOUNTS.map(a => `<option value="${a}" ${rec && rec.account === a ? 'selected' : ''}>${a}</option>`).join('')}</select></div>
     <div class="form-group"><label>备注</label><input id="tu_note" value="${rec ? escAttr(rec.note) : ''}" placeholder="可空"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
@@ -1843,7 +1846,13 @@ function tuitionModal(id) {
     </div>`;
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
-  setTimeout(() => document.getElementById('tu_date').focus(), 50);
+  setTimeout(() => { toggleBankAccount(); document.getElementById('tu_date').focus(); }, 50);
+}
+
+function toggleBankAccount() {
+  const method = document.getElementById('tu_method').value;
+  const group = document.getElementById('tu_account_group');
+  if (group) group.style.display = method === '银行转账' ? '' : 'none';
 }
 
 function saveTuition() {
@@ -1852,16 +1861,17 @@ function saveTuition() {
   const course = document.getElementById('tu_course').value.trim();
   const amount = parseFloat(document.getElementById('tu_amount').value) || 0;
   const method = document.getElementById('tu_method').value;
+  const account = method === '银行转账' ? document.getElementById('tu_account').value : '';
   const note = document.getElementById('tu_note').value.trim();
   if (!date) { showToast('请选择缴费日期'); return; }
   if (!student) { showToast('请输入学员姓名'); return; }
   const recs = getTuitionRecords();
   if (_editingTuitionId) {
     const rec = recs.find(r => r.id === _editingTuitionId);
-    if (rec) Object.assign(rec, { date, student, course, amount, method, note });
+    if (rec) Object.assign(rec, { date, student, course, amount, method, account, note });
     showToast('已更新缴费记录，记得保存到云端');
   } else {
-    recs.push({ id: Date.now(), date, student, course, amount, method, note });
+    recs.push({ id: Date.now(), date, student, course, amount, method, account, note });
     showToast('已添加缴费记录，记得保存到云端');
   }
   saveData();

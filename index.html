@@ -768,7 +768,8 @@ function renderTuitionPublic() {
   // Summary + method breakdown
   const byMethod = {};
   recs.forEach(r => {
-    const m = r.method || '其他';
+    let m = r.method || '其他';
+    if (m === '银行转账' && r.account) m = `银行转账（${r.account}）`;
     byMethod[m] = byMethod[m] || { count: 0, amount: 0 };
     byMethod[m].count++;
     byMethod[m].amount += Number(r.amount) || 0;
@@ -788,7 +789,7 @@ function renderTuitionPublic() {
   // Records
   html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin:18px 0 10px">📋 收费明细记录</div><div style="overflow-x:auto"><table><thead><tr><th>缴费日期</th><th>学员姓名</th><th>报课类别</th><th>费用</th><th>缴费方式</th><th>备注</th></tr></thead><tbody>';
   sorted.forEach(r => {
-    html += `<tr><td>${r.date || '—'}</td><td>${r.student || '—'}</td><td>${r.course || '—'}</td><td>${fmtFull(r.amount)}</td><td>${r.method || '—'}</td><td>${r.note || '—'}</td></tr>`;
+    html += `<tr><td>${r.date || '—'}</td><td>${r.student || '—'}</td><td>${r.course || '—'}</td><td>${fmtFull(r.amount)}</td><td>${r.method || '—'}${r.method === '银行转账' && r.account ? '<br><span style="font-size:12px;color:#64748b">' + (r.account) + '</span>' : ''}</td><td>${r.note || '—'}</td></tr>`;
   });
   html += `<tr class="row-total"><td>合计</td><td colspan="2">${recs.length} 笔</td><td>${fmtFull(total)}</td><td colspan="2"></td></tr></tbody></table></div>`;
 
