@@ -506,6 +506,7 @@ function fmtFull(n) {
   const v = Number(n) || 0;
   return '₱' + v.toLocaleString('en-PH', {maximumFractionDigits: 0});
 }
+function fmtCell(v) { return v > 0 ? fmtFull(v) : '<span style="color:#cbd5e1">—</span>'; }
 function fmt2(n) {
   const v = Number(n) || 0;
   return '₱' + v.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -1802,7 +1803,16 @@ function renderTuitionSummary() {
     if ((m === '银行转账' || m === '支票') && r.account) m = `${m}（${r.account}）`;
     byMethod[m] = (byMethod[m] || 0) + (Number(r.amount) || 0);
   });
-  const chips = PAY_METHODS.filter(m => byMethod[m]).map(m => `<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border-radius:999px;padding:4px 12px;font-size:12px;color:#475569;margin:2px 4px 2px 0">${m} <b style="color:#16a34a">${fmtFull(byMethod[m])}</b></span>`).join('');
+  const methodOrder = ['现金','银行转账（AUB公账）','银行转账（AUB个人）','银行转账','支票（公户）','支票（个人）','支票','gcash','微信','支付宝','其他'];
+  const keys = Object.keys(byMethod).sort((a, b) => {
+    const ia = methodOrder.indexOf(a);
+    const ib = methodOrder.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return a.localeCompare(b);
+  });
+  const chips = keys.map(m => `<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border-radius:999px;padding:4px 12px;font-size:12px;color:#475569;margin:2px 4px 2px 0">${m} <b style="color:#16a34a">${fmtFull(byMethod[m])}</b></span>`).join('');
   document.getElementById('tuitionSummary').innerHTML = `
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
       <div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:8px;padding:10px 16px">
