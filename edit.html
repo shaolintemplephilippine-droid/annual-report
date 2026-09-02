@@ -328,19 +328,24 @@
       <div id="tuitionSummary"></div>
       <div id="tuitionMonthlySummary" style="margin-bottom:14px"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">
-        <div style="font-size:13px;color:#64748b">筛选缴费方式明细</div>
-        <select id="tuitionMethodFilter" onchange="onTuitionFilterChange()" style="padding:6px 10px;border-radius:6px;border:1px solid #cbd5e1;font-size:13px;background:#fff">
-          <option value="">全部缴费方式</option>
-          <option value="现金">现金</option>
-          <option value="银行转账（AUB公账）">银行转账（AUB公账）</option>
-          <option value="银行转账（AUB个人）">银行转账（AUB个人）</option>
-          <option value="支票（公户）">支票（公户）</option>
-          <option value="支票（个人）">支票（个人）</option>
-          <option value="gcash">gcash</option>
-          <option value="微信">微信</option>
-          <option value="支付宝">支付宝</option>
-          <option value="其他">其他</option>
-        </select>
+        <div style="font-size:13px;color:#64748b">筛选缴费明细</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="tuitionMonthFilter" onchange="onTuitionMonthFilterChange()" style="padding:6px 10px;border-radius:6px;border:1px solid #cbd5e1;font-size:13px;background:#fff">
+            <option value="">全部月份</option>
+          </select>
+          <select id="tuitionMethodFilter" onchange="onTuitionFilterChange()" style="padding:6px 10px;border-radius:6px;border:1px solid #cbd5e1;font-size:13px;background:#fff">
+            <option value="">全部缴费方式</option>
+            <option value="现金">现金</option>
+            <option value="银行转账（AUB公账）">银行转账（AUB公账）</option>
+            <option value="银行转账（AUB个人）">银行转账（AUB个人）</option>
+            <option value="支票（公户）">支票（公户）</option>
+            <option value="支票（个人）">支票（个人）</option>
+            <option value="gcash">gcash</option>
+            <option value="微信">微信</option>
+            <option value="支付宝">支付宝</option>
+            <option value="其他">其他</option>
+          </select>
+        </div>
       </div>
       <div style="overflow-x:auto"><table class="edit-table" id="tuitionTable"></table></div>
       <p style="font-size:12px;color:#94a3b8;margin-top:12px">💡 缴费方式支持：现金 / 银行转账 / gcash / 微信 / 支付宝 / 支票 / 其他。修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
@@ -1760,15 +1765,30 @@ function getTuitionMethodLabel(r) {
 }
 
 let _tuitionFilter = '';
+let _tuitionMonthFilter = '';
 
 function onTuitionFilterChange() {
   _tuitionFilter = document.getElementById('tuitionMethodFilter').value || '';
   renderTuitionTable();
 }
 
+function onTuitionMonthFilterChange() {
+  _tuitionMonthFilter = document.getElementById('tuitionMonthFilter').value || '';
+  renderTuitionTable();
+}
+
+function renderTuitionMonthFilterOptions() {
+  const sel = document.getElementById('tuitionMonthFilter');
+  if (!sel) return;
+  const labels = [...new Set(getTuitionRecords().map(r => getMonthLabelFromDate(r.date)).filter(Boolean))].sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0));
+  const current = sel.value || '';
+  sel.innerHTML = '<option value="">全部月份</option>' + labels.map(l => `<option value="${l}" ${l === current ? 'selected' : ''}>${l}</option>`).join('');
+}
+
 function renderTuition() {
   renderTuitionSummary();
   renderTuitionMonthlySummary();
+  renderTuitionMonthFilterOptions();
   renderTuitionTable();
 }
 
@@ -1868,10 +1888,14 @@ function renderTuitionTable() {
   if (_tuitionFilter) {
     recs = recs.filter(r => getTuitionMethodLabel(r) === _tuitionFilter);
   }
+  if (_tuitionMonthFilter) {
+    recs = recs.filter(r => getMonthLabelFromDate(r.date) === _tuitionMonthFilter);
+  }
   const sorted = [...recs].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.id || 0) - (a.id || 0));
   let html = `<thead><tr><th>缴费日期</th><th>学员姓名</th><th>报课类别</th><th>费用（₱）</th><th>缴费方式</th><th>备注</th><th></th></tr></thead><tbody>`;
   if (!sorted.length) {
-    html += `<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:20px">${_tuitionFilter ? '该缴费方式暂无记录' : '暂无缴费记录'}</td></tr>`;
+    const hasFilter = _tuitionFilter || _tuitionMonthFilter;
+    html += `<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:20px">${hasFilter ? '没有符合条件的缴费记录' : '暂无缴费记录'}</td></tr>`;
   }
   sorted.forEach(r => {
     html += `<tr>
