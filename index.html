@@ -741,17 +741,35 @@ function renderUtilitiesPublic() {
 function renderTuitionByMonth() {
   const card = document.getElementById('tuitionMonthCard');
   if (!card) return;
+  const recs = db.tuitionRecords || [];
+  const map = {};
+  recs.forEach(r => {
+    const label = getMonthLabelFromDate(r.date);
+    if (!label) return;
+    if (!map[label]) map[label] = { count: 0, amount: 0, cash: 0, transferPublic: 0, transferPersonal: 0, check: 0, gcash: 0 };
+    map[label].count++;
+    map[label].amount += Number(r.amount) || 0;
+    const m = r.method || '其他';
+    if (m === '现金') map[label].cash += Number(r.amount) || 0;
+    else if (m === '银行转账') {
+      if (r.account === 'AUB公账') map[label].transferPublic += Number(r.amount) || 0;
+      else if (r.account === 'AUB个人') map[label].transferPersonal += Number(r.amount) || 0;
+    }
+    else if (m === '支票') map[label].check += Number(r.amount) || 0;
+    else if (m === 'gcash') map[label].gcash += Number(r.amount) || 0;
+  });
   const months = db.months || [];
-  const hasData = months.some(m => m.income && m.income['武术学费']);
+  const hasData = months.some(m => (m.income && m.income['武术学费']) || map[m.label]);
   if (!hasData) { card.style.display = 'none'; return; }
   card.style.display = '';
+  const fmtC = v => v > 0 ? fmtFull(v) : '<span style="color:#cbd5e1">—</span>';
   const rows = months.map(m => {
-    const amount = (m.income && m.income['武术学费']) || 0;
-    return `<tr><td>${m.label}</td><td style="text-align:right">${fmtFull(amount)}</td></tr>`;
+    const item = map[m.label] || { count: 0, amount: (m.income && m.income['武术学费']) || 0, cash: 0, transferPublic: 0, transferPersonal: 0, check: 0, gcash: 0 };
+    return `<tr><td>${m.label}</td><td style="text-align:right">${fmtC(item.cash)}</td><td style="text-align:right">${fmtC(item.transferPublic)}</td><td style="text-align:right">${fmtC(item.transferPersonal)}</td><td style="text-align:right">${fmtC(item.check)}</td><td style="text-align:right">${fmtC(item.gcash)}</td><td style="text-align:right;font-weight:600">${fmtFull(item.amount)}</td></tr>`;
   }).join('');
   document.getElementById('tuitionMonthContent').innerHTML = `
-    <div style="overflow-x:auto"><table>
-      <thead><tr><th>月份</th><th style="text-align:right">武术学费</th></tr></thead>
+    <div style="overflow-x:auto"><table style="font-size:13px">
+      <thead><tr><th>月份</th><th style="text-align:right">现金</th><th style="text-align:right">转账-公户</th><th style="text-align:right">转账-个人</th><th style="text-align:right">支票</th><th style="text-align:right">gcash</th><th style="text-align:right">合计</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
 }

@@ -1744,9 +1744,17 @@ function renderTuitionMonthlySummary() {
   recs.forEach(r => {
     const label = getMonthLabelFromDate(r.date);
     if (!label) return;
-    if (!map[label]) map[label] = { count: 0, amount: 0 };
+    if (!map[label]) map[label] = { count: 0, amount: 0, cash: 0, transferPublic: 0, transferPersonal: 0, check: 0, gcash: 0 };
     map[label].count++;
     map[label].amount += Number(r.amount) || 0;
+    const m = r.method || '其他';
+    if (m === '现金') map[label].cash += Number(r.amount) || 0;
+    else if (m === '银行转账') {
+      if (r.account === 'AUB公账') map[label].transferPublic += Number(r.amount) || 0;
+      else if (r.account === 'AUB个人') map[label].transferPersonal += Number(r.amount) || 0;
+    }
+    else if (m === '支票') map[label].check += Number(r.amount) || 0;
+    else if (m === 'gcash') map[label].gcash += Number(r.amount) || 0;
   });
   const labels = Object.keys(map).sort((a, b) => {
     const ma = parseInt(a, 10) || 0;
@@ -1756,17 +1764,22 @@ function renderTuitionMonthlySummary() {
   if (!labels.length) { el.innerHTML = ''; return; }
   const rows = labels.map(label => {
     const item = map[label];
-    return `<tr><td>${label}</td><td>${item.count} 笔</td><td style="text-align:right;font-weight:600;color:#16a34a">${fmtFull(item.amount)}</td></tr>`;
+    return `<tr><td>${label}</td><td>${item.count} 笔</td><td style="text-align:right">${fmtCell(item.cash)}</td><td style="text-align:right">${fmtCell(item.transferPublic)}</td><td style="text-align:right">${fmtCell(item.transferPersonal)}</td><td style="text-align:right">${fmtCell(item.check)}</td><td style="text-align:right">${fmtCell(item.gcash)}</td><td style="text-align:right;font-weight:600;color:#16a34a">${fmtFull(item.amount)}</td></tr>`;
   }).join('');
   const total = labels.reduce((a, label) => a + map[label].amount, 0);
+  const cashT = labels.reduce((a, l) => a + map[l].cash, 0);
+  const pubT = labels.reduce((a, l) => a + map[l].transferPublic, 0);
+  const perT = labels.reduce((a, l) => a + map[l].transferPersonal, 0);
+  const checkT = labels.reduce((a, l) => a + map[l].check, 0);
+  const gcashT = labels.reduce((a, l) => a + map[l].gcash, 0);
   el.innerHTML = `
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px">
-      <div style="font-size:14px;font-weight:600;color:#1e293b;margin-bottom:10px">📅 武术费月度统计</div>
+      <div style="font-size:14px;font-weight:600;color:#1e293b;margin-bottom:10px">📅 武术费月度统计（按收款方式）</div>
       <div style="overflow-x:auto">
-        <table class="edit-table" style="margin:0">
-          <thead><tr><th>月份</th><th>缴费笔数</th><th style="text-align:right">当月收入</th></tr></thead>
+        <table class="edit-table" style="margin:0;font-size:13px">
+          <thead><tr><th>月份</th><th>笔数</th><th style="text-align:right">现金</th><th style="text-align:right">转账-公户</th><th style="text-align:right">转账-个人</th><th style="text-align:right">支票</th><th style="text-align:right">gcash</th><th style="text-align:right">合计</th></tr></thead>
           <tbody>${rows}</tbody>
-          <tfoot><tr style="background:#f0fdf4;font-weight:700"><td>合计</td><td>${recs.length} 笔</td><td style="text-align:right;color:#16a34a">${fmtFull(total)}</td></tr></tfoot>
+          <tfoot><tr style="background:#f0fdf4;font-weight:700"><td>合计</td><td>${recs.length} 笔</td><td style="text-align:right">${fmtCell(cashT)}</td><td style="text-align:right">${fmtCell(pubT)}</td><td style="text-align:right">${fmtCell(perT)}</td><td style="text-align:right">${fmtCell(checkT)}</td><td style="text-align:right">${fmtCell(gcashT)}</td><td style="text-align:right;color:#16a34a">${fmtFull(total)}</td></tr></tfoot>
         </table>
       </div>
     </div>`;
