@@ -746,34 +746,34 @@ function renderTuitionByMonth() {
   recs.forEach(r => {
     const label = getMonthLabelFromDate(r.date);
     if (!label) return;
-    if (!map[label]) map[label] = { count: 0, amount: 0, cash: 0, transferPublic: 0, transferPersonal: 0, check: 0, checkPublic: 0, checkPersonal: 0, gcash: 0 };
+    if (!map[label]) map[label] = { count: 0, amount: 0, cash: 0, cashCount: 0, transferPublic: 0, transferPublicCount: 0, transferPersonal: 0, transferPersonalCount: 0, check: 0, checkPublic: 0, checkPublicCount: 0, checkPersonal: 0, checkPersonalCount: 0, gcash: 0, gcashCount: 0 };
     map[label].count++;
     map[label].amount += Number(r.amount) || 0;
     const m = r.method || '其他';
-    if (m === '现金') map[label].cash += Number(r.amount) || 0;
+    if (m === '现金') { map[label].cash += Number(r.amount) || 0; map[label].cashCount++; }
     else if (m === '银行转账') {
-      if (r.account === 'AUB公账') map[label].transferPublic += Number(r.amount) || 0;
-      else if (r.account === 'AUB个人') map[label].transferPersonal += Number(r.amount) || 0;
+      if (r.account === 'AUB公账') { map[label].transferPublic += Number(r.amount) || 0; map[label].transferPublicCount++; }
+      else if (r.account === 'AUB个人') { map[label].transferPersonal += Number(r.amount) || 0; map[label].transferPersonalCount++; }
     }
     else if (m === '支票') {
-      if (r.account === '公户') map[label].checkPublic += Number(r.amount) || 0;
-      else if (r.account === '个人') map[label].checkPersonal += Number(r.amount) || 0;
+      if (r.account === '公户') { map[label].checkPublic += Number(r.amount) || 0; map[label].checkPublicCount++; }
+      else if (r.account === '个人') { map[label].checkPersonal += Number(r.amount) || 0; map[label].checkPersonalCount++; }
       else map[label].check += Number(r.amount) || 0;
     }
-    else if (m === 'gcash') map[label].gcash += Number(r.amount) || 0;
+    else if (m === 'gcash') { map[label].gcash += Number(r.amount) || 0; map[label].gcashCount++; }
   });
   const months = db.months || [];
   const hasData = months.some(m => (m.income && m.income['武术学费']) || map[m.label]);
   if (!hasData) { card.style.display = 'none'; return; }
   card.style.display = '';
-  const fmtC = v => v > 0 ? fmtFull(v) : '<span style="color:#cbd5e1">—</span>';
+  const fmtCC = (amount, count) => amount > 0 ? fmtFull(amount) + '<br><span style="font-size:12px;color:#64748b">' + count + ' 笔</span>' : '<span style="color:#cbd5e1">—</span>';
   const rows = months.map(m => {
-    const item = map[m.label] || { count: 0, amount: (m.income && m.income['武术学费']) || 0, cash: 0, transferPublic: 0, transferPersonal: 0, check: 0, gcash: 0 };
-    return `<tr><td>${m.label}</td><td style="text-align:right">${fmtC(item.cash)}</td><td style="text-align:right">${fmtC(item.transferPublic)}</td><td style="text-align:right">${fmtC(item.transferPersonal)}</td><td style="text-align:right">${fmtC(item.checkPublic)}</td><td style="text-align:right">${fmtC(item.checkPersonal)}</td><td style="text-align:right">${fmtC(item.gcash)}</td><td style="text-align:right;font-weight:600">${fmtFull(item.amount)}</td></tr>`;
+    const item = map[m.label] || { count: 0, amount: (m.income && m.income['武术学费']) || 0, cash: 0, cashCount: 0, transferPublic: 0, transferPublicCount: 0, transferPersonal: 0, transferPersonalCount: 0, check: 0, checkPublic: 0, checkPublicCount: 0, checkPersonal: 0, checkPersonalCount: 0, gcash: 0, gcashCount: 0 };
+    return `<tr><td>${m.label}</td><td style="text-align:center">${item.count} 笔</td><td style="text-align:right">${fmtCC(item.cash, item.cashCount)}</td><td style="text-align:right">${fmtCC(item.transferPublic, item.transferPublicCount)}</td><td style="text-align:right">${fmtCC(item.transferPersonal, item.transferPersonalCount)}</td><td style="text-align:right">${fmtCC(item.checkPublic, item.checkPublicCount)}</td><td style="text-align:right">${fmtCC(item.checkPersonal, item.checkPersonalCount)}</td><td style="text-align:right">${fmtCC(item.gcash, item.gcashCount)}</td><td style="text-align:right;font-weight:600">${fmtFull(item.amount)}</td></tr>`;
   }).join('');
   document.getElementById('tuitionMonthContent').innerHTML = `
     <div style="overflow-x:auto"><table style="font-size:13px">
-      <thead><tr><th>月份</th><th style="text-align:right">现金</th><th style="text-align:right">转账-公户</th><th style="text-align:right">转账-个人</th><th style="text-align:right">支票-公户</th><th style="text-align:right">支票-个人</th><th style="text-align:right">gcash</th><th style="text-align:right">合计</th></tr></thead>
+      <thead><tr><th>月份</th><th style="text-align:center">笔数</th><th style="text-align:right">现金</th><th style="text-align:right">转账-公户</th><th style="text-align:right">转账-个人</th><th style="text-align:right">支票-公户</th><th style="text-align:right">支票-个人</th><th style="text-align:right">gcash</th><th style="text-align:right">合计</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
 }
