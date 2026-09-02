@@ -1900,7 +1900,7 @@ function saveTuition() {
   const course = document.getElementById('tu_course').value.trim();
   const amount = parseFloat(document.getElementById('tu_amount').value) || 0;
   const method = document.getElementById('tu_method').value;
-  const account = method === '银行转账' ? document.getElementById('tu_account').value : '';
+  const account = (method === '银行转账' || method === '支票') ? document.getElementById('tu_account').value : '';
   const note = document.getElementById('tu_note').value.trim();
   if (!date) { showToast('请选择缴费日期'); return; }
   if (!student) { showToast('请输入学员姓名'); return; }
