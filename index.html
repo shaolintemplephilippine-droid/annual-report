@@ -746,7 +746,7 @@ function renderTuitionByMonth() {
   recs.forEach(r => {
     const label = getMonthLabelFromDate(r.date);
     if (!label) return;
-    if (!map[label]) map[label] = { count: 0, amount: 0, cash: 0, transferPublic: 0, transferPersonal: 0, check: 0, gcash: 0 };
+    if (!map[label]) map[label] = { count: 0, amount: 0, cash: 0, transferPublic: 0, transferPersonal: 0, check: 0, checkPublic: 0, checkPersonal: 0, gcash: 0 };
     map[label].count++;
     map[label].amount += Number(r.amount) || 0;
     const m = r.method || '其他';
@@ -755,7 +755,11 @@ function renderTuitionByMonth() {
       if (r.account === 'AUB公账') map[label].transferPublic += Number(r.amount) || 0;
       else if (r.account === 'AUB个人') map[label].transferPersonal += Number(r.amount) || 0;
     }
-    else if (m === '支票') map[label].check += Number(r.amount) || 0;
+    else if (m === '支票') {
+      if (r.account === '公户') map[label].checkPublic += Number(r.amount) || 0;
+      else if (r.account === '个人') map[label].checkPersonal += Number(r.amount) || 0;
+      else map[label].check += Number(r.amount) || 0;
+    }
     else if (m === 'gcash') map[label].gcash += Number(r.amount) || 0;
   });
   const months = db.months || [];
@@ -765,11 +769,11 @@ function renderTuitionByMonth() {
   const fmtC = v => v > 0 ? fmtFull(v) : '<span style="color:#cbd5e1">—</span>';
   const rows = months.map(m => {
     const item = map[m.label] || { count: 0, amount: (m.income && m.income['武术学费']) || 0, cash: 0, transferPublic: 0, transferPersonal: 0, check: 0, gcash: 0 };
-    return `<tr><td>${m.label}</td><td style="text-align:right">${fmtC(item.cash)}</td><td style="text-align:right">${fmtC(item.transferPublic)}</td><td style="text-align:right">${fmtC(item.transferPersonal)}</td><td style="text-align:right">${fmtC(item.check)}</td><td style="text-align:right">${fmtC(item.gcash)}</td><td style="text-align:right;font-weight:600">${fmtFull(item.amount)}</td></tr>`;
+    return `<tr><td>${m.label}</td><td style="text-align:right">${fmtC(item.cash)}</td><td style="text-align:right">${fmtC(item.transferPublic)}</td><td style="text-align:right">${fmtC(item.transferPersonal)}</td><td style="text-align:right">${fmtC(item.checkPublic)}</td><td style="text-align:right">${fmtC(item.checkPersonal)}</td><td style="text-align:right">${fmtC(item.gcash)}</td><td style="text-align:right;font-weight:600">${fmtFull(item.amount)}</td></tr>`;
   }).join('');
   document.getElementById('tuitionMonthContent').innerHTML = `
     <div style="overflow-x:auto"><table style="font-size:13px">
-      <thead><tr><th>月份</th><th style="text-align:right">现金</th><th style="text-align:right">转账-公户</th><th style="text-align:right">转账-个人</th><th style="text-align:right">支票</th><th style="text-align:right">gcash</th><th style="text-align:right">合计</th></tr></thead>
+      <thead><tr><th>月份</th><th style="text-align:right">现金</th><th style="text-align:right">转账-公户</th><th style="text-align:right">转账-个人</th><th style="text-align:right">支票-公户</th><th style="text-align:right">支票-个人</th><th style="text-align:right">gcash</th><th style="text-align:right">合计</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
 }
@@ -787,7 +791,7 @@ function renderTuitionPublic() {
   const byMethod = {};
   recs.forEach(r => {
     let m = r.method || '其他';
-    if (m === '银行转账' && r.account) m = `银行转账（${r.account}）`;
+    if ((m === '银行转账' || m === '支票') && r.account) m = `${m}（${r.account}）`;
     byMethod[m] = byMethod[m] || { count: 0, amount: 0 };
     byMethod[m].count++;
     byMethod[m].amount += Number(r.amount) || 0;
@@ -807,7 +811,7 @@ function renderTuitionPublic() {
   // Records
   html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin:18px 0 10px">📋 收费明细记录</div><div style="overflow-x:auto"><table><thead><tr><th>缴费日期</th><th>学员姓名</th><th>报课类别</th><th>费用</th><th>缴费方式</th><th>备注</th></tr></thead><tbody>';
   sorted.forEach(r => {
-    html += `<tr><td>${r.date || '—'}</td><td>${r.student || '—'}</td><td>${r.course || '—'}</td><td>${fmtFull(r.amount)}</td><td>${r.method || '—'}${r.method === '银行转账' && r.account ? '<br><span style="font-size:12px;color:#64748b">' + (r.account) + '</span>' : ''}</td><td>${r.note || '—'}</td></tr>`;
+    html += `<tr><td>${r.date || '—'}</td><td>${r.student || '—'}</td><td>${r.course || '—'}</td><td>${fmtFull(r.amount)}</td><td>${r.method || '—'}${(r.method === '银行转账' || r.method === '支票') && r.account ? '<br><span style="font-size:12px;color:#64748b">' + (r.account) + '</span>' : ''}</td><td>${r.note || '—'}</td></tr>`;
   });
   html += `<tr class="row-total"><td>合计</td><td colspan="2">${recs.length} 笔</td><td>${fmtFull(total)}</td><td colspan="2"></td></tr></tbody></table></div>`;
 

@@ -784,7 +784,10 @@ function renderDetailTable(labels) {
 // ===================== Utilities & Tuition (report view) =====================
 const UTIL_MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const PAY_METHODS = ['现金','银行转账','gcash','微信','支付宝','支票','其他'];
-const BANK_ACCOUNTS = ['AUB公账','AUB个人'];
+const METHOD_ACCOUNTS = {
+  '银行转账': ['AUB公账','AUB个人'],
+  '支票': ['公户','个人']
+};
 
 function renderUtilitiesPublic() {
   const card = document.getElementById('utilitiesCard');
@@ -1744,7 +1747,7 @@ function renderTuitionMonthlySummary() {
   recs.forEach(r => {
     const label = getMonthLabelFromDate(r.date);
     if (!label) return;
-    if (!map[label]) map[label] = { count: 0, amount: 0, cash: 0, transferPublic: 0, transferPersonal: 0, check: 0, gcash: 0 };
+    if (!map[label]) map[label] = { count: 0, amount: 0, cash: 0, transferPublic: 0, transferPersonal: 0, check: 0, checkPublic: 0, checkPersonal: 0, gcash: 0 };
     map[label].count++;
     map[label].amount += Number(r.amount) || 0;
     const m = r.method || '其他';
@@ -1753,7 +1756,11 @@ function renderTuitionMonthlySummary() {
       if (r.account === 'AUB公账') map[label].transferPublic += Number(r.amount) || 0;
       else if (r.account === 'AUB个人') map[label].transferPersonal += Number(r.amount) || 0;
     }
-    else if (m === '支票') map[label].check += Number(r.amount) || 0;
+    else if (m === '支票') {
+      if (r.account === '公户') map[label].checkPublic += Number(r.amount) || 0;
+      else if (r.account === '个人') map[label].checkPersonal += Number(r.amount) || 0;
+      else map[label].check += Number(r.amount) || 0;
+    }
     else if (m === 'gcash') map[label].gcash += Number(r.amount) || 0;
   });
   const labels = Object.keys(map).sort((a, b) => {
@@ -1764,22 +1771,23 @@ function renderTuitionMonthlySummary() {
   if (!labels.length) { el.innerHTML = ''; return; }
   const rows = labels.map(label => {
     const item = map[label];
-    return `<tr><td>${label}</td><td>${item.count} 笔</td><td style="text-align:right">${fmtCell(item.cash)}</td><td style="text-align:right">${fmtCell(item.transferPublic)}</td><td style="text-align:right">${fmtCell(item.transferPersonal)}</td><td style="text-align:right">${fmtCell(item.check)}</td><td style="text-align:right">${fmtCell(item.gcash)}</td><td style="text-align:right;font-weight:600;color:#16a34a">${fmtFull(item.amount)}</td></tr>`;
+    return `<tr><td>${label}</td><td>${item.count} 笔</td><td style="text-align:right">${fmtCell(item.cash)}</td><td style="text-align:right">${fmtCell(item.transferPublic)}</td><td style="text-align:right">${fmtCell(item.transferPersonal)}</td><td style="text-align:right">${fmtCell(item.checkPublic)}</td><td style="text-align:right">${fmtCell(item.checkPersonal)}</td><td style="text-align:right">${fmtCell(item.gcash)}</td><td style="text-align:right;font-weight:600;color:#16a34a">${fmtFull(item.amount)}</td></tr>`;
   }).join('');
   const total = labels.reduce((a, label) => a + map[label].amount, 0);
   const cashT = labels.reduce((a, l) => a + map[l].cash, 0);
   const pubT = labels.reduce((a, l) => a + map[l].transferPublic, 0);
   const perT = labels.reduce((a, l) => a + map[l].transferPersonal, 0);
-  const checkT = labels.reduce((a, l) => a + map[l].check, 0);
+  const checkPubT = labels.reduce((a, l) => a + map[l].checkPublic, 0);
+  const checkPerT = labels.reduce((a, l) => a + map[l].checkPersonal, 0);
   const gcashT = labels.reduce((a, l) => a + map[l].gcash, 0);
   el.innerHTML = `
     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px">
       <div style="font-size:14px;font-weight:600;color:#1e293b;margin-bottom:10px">📅 武术费月度统计（按收款方式）</div>
       <div style="overflow-x:auto">
         <table class="edit-table" style="margin:0;font-size:13px">
-          <thead><tr><th>月份</th><th>笔数</th><th style="text-align:right">现金</th><th style="text-align:right">转账-公户</th><th style="text-align:right">转账-个人</th><th style="text-align:right">支票</th><th style="text-align:right">gcash</th><th style="text-align:right">合计</th></tr></thead>
+          <thead><tr><th>月份</th><th>笔数</th><th style="text-align:right">现金</th><th style="text-align:right">转账-公户</th><th style="text-align:right">转账-个人</th><th style="text-align:right">支票-公户</th><th style="text-align:right">支票-个人</th><th style="text-align:right">gcash</th><th style="text-align:right">合计</th></tr></thead>
           <tbody>${rows}</tbody>
-          <tfoot><tr style="background:#f0fdf4;font-weight:700"><td>合计</td><td>${recs.length} 笔</td><td style="text-align:right">${fmtCell(cashT)}</td><td style="text-align:right">${fmtCell(pubT)}</td><td style="text-align:right">${fmtCell(perT)}</td><td style="text-align:right">${fmtCell(checkT)}</td><td style="text-align:right">${fmtCell(gcashT)}</td><td style="text-align:right;color:#16a34a">${fmtFull(total)}</td></tr></tfoot>
+          <tfoot><tr style="background:#f0fdf4;font-weight:700"><td>合计</td><td>${recs.length} 笔</td><td style="text-align:right">${fmtCell(cashT)}</td><td style="text-align:right">${fmtCell(pubT)}</td><td style="text-align:right">${fmtCell(perT)}</td><td style="text-align:right">${fmtCell(checkPubT)}</td><td style="text-align:right">${fmtCell(checkPerT)}</td><td style="text-align:right">${fmtCell(gcashT)}</td><td style="text-align:right;color:#16a34a">${fmtFull(total)}</td></tr></tfoot>
         </table>
       </div>
     </div>`;
@@ -1791,7 +1799,7 @@ function renderTuitionSummary() {
   const byMethod = {};
   recs.forEach(r => {
     let m = r.method || '其他';
-    if (m === '银行转账' && r.account) m = `银行转账（${r.account}）`;
+    if ((m === '银行转账' || m === '支票') && r.account) m = `${m}（${r.account}）`;
     byMethod[m] = (byMethod[m] || 0) + (Number(r.amount) || 0);
   });
   const chips = PAY_METHODS.filter(m => byMethod[m]).map(m => `<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border-radius:999px;padding:4px 12px;font-size:12px;color:#475569;margin:2px 4px 2px 0">${m} <b style="color:#16a34a">${fmtFull(byMethod[m])}</b></span>`).join('');
@@ -1818,7 +1826,7 @@ function renderTuitionTable() {
       <td>${escAttr(r.student) || '—'}</td>
       <td>${escAttr(r.course) || '—'}</td>
       <td>${fmtFull(r.amount)}</td>
-      <td>${escAttr(r.method) || '—'}${r.method === '银行转账' && r.account ? '<br><span style="font-size:12px;color:#64748b">' + escAttr(r.account) + '</span>' : ''}</td>
+      <td>${escAttr(r.method) || '—'}${(r.method === '银行转账' || r.method === '支票') && r.account ? '<br><span style="font-size:12px;color:#64748b">' + escAttr(r.account) + '</span>' : ''}</td>
       <td>${escAttr(r.note) || '—'}</td>
       <td><button class="icon-btn" onclick="tuitionModal(${r.id})" title="编辑" style="color:#1e40af">✎</button><button class="icon-btn" onclick="deleteTuition(${r.id})" title="删除">✕</button></td>
     </tr>`;
@@ -1850,8 +1858,8 @@ function tuitionModal(id) {
       </div>
       <div class="form-group"><label>费用（₱）</label><input id="tu_amount" type="number" value="${rec ? rec.amount || '' : ''}" placeholder="0"></div>
     </div>
-    <div class="form-group"><label>缴费方式</label><select id="tu_method" onchange="toggleBankAccount()">${PAY_METHODS.map(m => `<option value="${m}" ${rec && rec.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
-    <div class="form-group" id="tu_account_group" style="display:none"><label>银行账户</label><select id="tu_account">${BANK_ACCOUNTS.map(a => `<option value="${a}" ${rec && rec.account === a ? 'selected' : ''}>${a}</option>`).join('')}</select></div>
+    <div class="form-group"><label>缴费方式</label><select id="tu_method" onchange="toggleMethodAccount()">${PAY_METHODS.map(m => `<option value="${m}" ${rec && rec.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
+    <div class="form-group" id="tu_account_group" style="display:none"><label id="tu_account_label">账户</label><select id="tu_account"></select></div>
     <div class="form-group"><label>备注</label><input id="tu_note" value="${rec ? escAttr(rec.note) : ''}" placeholder="可空"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
@@ -1859,13 +1867,21 @@ function tuitionModal(id) {
     </div>`;
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
-  setTimeout(() => { toggleBankAccount(); document.getElementById('tu_date').focus(); }, 50);
+  setTimeout(() => { toggleMethodAccount(); document.getElementById('tu_date').focus(); }, 50);
 }
 
-function toggleBankAccount() {
+function toggleMethodAccount() {
   const method = document.getElementById('tu_method').value;
   const group = document.getElementById('tu_account_group');
-  if (group) group.style.display = method === '银行转账' ? '' : 'none';
+  const select = document.getElementById('tu_account');
+  const label = document.getElementById('tu_account_label');
+  const accounts = METHOD_ACCOUNTS[method];
+  if (!accounts || !group || !select) { if (group) group.style.display = 'none'; return; }
+  const currentRec = _editingTuitionId ? getTuitionRecords().find(r => r.id === _editingTuitionId) : null;
+  const selectedAccount = currentRec && currentRec.method === method ? currentRec.account : '';
+  select.innerHTML = accounts.map(a => `<option value="${a}" ${a === selectedAccount ? 'selected' : ''}>${a}</option>`).join('');
+  label.textContent = method === '银行转账' ? '银行账户' : '支票账户';
+  group.style.display = '';
 }
 
 function saveTuition() {
