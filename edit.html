@@ -403,7 +403,7 @@
         <span class="h2-left">👷 菲籍员工工资明细</span>
         <button class="btn btn-sm btn-outline" onclick="payrollModal()">+ 添加发薪记录</button>
       </h2>
-      <p style="font-size:13px;color:#64748b;margin-bottom:16px">菲籍员工一般每半个月发一次工资（上半月 1–15 日 / 下半月 16–月底）：填月薪后会自动带出半个月的实发金额，可再手改。修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
+      <p style="font-size:13px;color:#64748b;margin-bottom:16px">菲籍员工一般每半个月发一次工资（上半月 1–15 日 / 下半月 16–月底）：填月薪后会自动带出半个月的实发金额，可再手改。这里每条记录会按发薪日期自动汇总进「数据录入」的团体工资行。修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
       <div id="payrollSummary"></div>
       <div style="overflow-x:auto"><table class="edit-table" id="payrollTable"></table></div>
     </div>
@@ -2520,9 +2520,10 @@ function updateNetPayTotals() {
 }
 
 // ===================== 明细账本 → 月度支出自动汇总 =====================
-// 菲籍员工工资 / 房租 / 网费 三个明细账本，按日期自动汇总进「数据录入」的月度支出行
-const PAYROLL_ROW = '菲籍员工工资';
+// 菲籍员工工资 → 支出项「团体工资」；房租交款 → 「房租」；网费 → 「网费」（都按日期自动汇总）
+const PAYROLL_ROW = '团体工资';
 const AUTO_EXPENSE_ROWS = [PAYROLL_ROW, '房租', '网费'];
+const LEGACY_AUTO_ROWS = ['菲籍员工工资'];
 
 function autoUtilities() {
   if (!db.utilities) db.utilities = { meters: [], electricBills: {}, electricPayments: [], waterPayments: [], netPayments: [], nextId: { electric: 1, water: 1 } };
@@ -2532,40 +2533,79 @@ function autoUtilities() {
 
 function ensureAutoExpenseCats() {
   if (!db.expenseCats) db.expenseCats = [];
+  // 旧版曾单独建过「菲籍员工工资」行，现已并入「团体工资」，清掉避免重复计算
+  LEGACY_AUTO_ROWS.forEach(c => {
+    db.expenseCats = db.expenseCats.filter(x => x !== c);
+    (db.months || []).forEach(m => { if (m.expenses) delete m.expenses[c]; });
+  });
   AUTO_EXPENSE_ROWS.forEach(c => {
     if (db.expenseCats.indexOf(c) === -1) db.expenseCats.push(c);
   });
 }
 
-// 旧版手动录入的房租 / 网费金额转成明细记录，保证汇总前后总额不变（只跑一次）
+// 旧版手动录入的 团体工资 / 房租 / 网费 金额转成明细记录，保证汇总前后总额不变（各只跑一次）
 function migrateLegacyAutoExpenses() {
-  if (db.autoExpenseLegacyMigrated) return;
   if (!db.months) db.months = [];
-  if (!db.rentRecords) db.rentRecords = [];
   const u = autoUtilities();
   const RENT = '房租', NET = '网费';
+  if (!db.rentRecords) db.rentRecords = [];
+  if (!db.payrollRecords) db.payrollRecords = [];
   const year = Number(db.year) || new Date().getFullYear();
-  const rentTaken = {}, netTaken = {};
-  db.rentRecords.forEach(r => { if (r.period) rentTaken[r.period] = true; });
-  u.netPayments.forEach(n => { const mon = Number(n.month) || 0; if (mon) netTaken[mon] = true; });
   let seq = 0;
-  db.months.forEach(m => {
-    const mon = parseInt(m.label, 10) || 0;
-    if (!mon) return;
-    const label = mon + '月';
-    const mm = String(mon).padStart(2, '0');
-    const rent = Number(m.expenses && m.expenses[RENT]) || 0;
-    const net = Number(m.expenses && m.expenses[NET]) || 0;
-    if (rent > 0 && !rentTaken[label]) {
-      db.rentRecords.push({ id: Date.now() + (seq++), date: year + '-' + mm + '-01', period: label, amount: rent, payee: '', note: '历史数据（原手动录入）', legacy: true });
-      rentTaken[label] = true;
-    }
-    if (net > 0 && !netTaken[mon]) {
-      u.netPayments.push({ id: Date.now() + (seq++), month: mon, payDate: '', amount: net, provider: '', note: '历史数据（原手动录入）', legacy: true });
-      netTaken[mon] = true;
-    }
-  });
-  db.autoExpenseLegacyMigrated = true;
+
+  if (!db.autoExpenseLegacyMigrated) {
+    const rentTaken = {}, netTaken = {};
+    db.rentRecords.forEach(r => { if (r.period) rentTaken[r.period] = true; });
+    u.netPayments.forEach(n => { const mon = Number(n.month) || 0; if (mon) netTaken[mon] = true; });
+    db.months.forEach(m => {
+      const mon = parseInt(m.label, 10) || 0;
+      if (!mon) return;
+      const label = mon + '月';
+      const mm = String(mon).padStart(2, '0');
+      const rent = Number(m.expenses && m.expenses[RENT]) || 0;
+      const net = Number(m.expenses && m.expenses[NET]) || 0;
+      if (rent > 0 && !rentTaken[label]) {
+        db.rentRecords.push({ id: Date.now() + (seq++), date: year + '-' + mm + '-01', period: label, amount: rent, payee: '', note: '历史数据（原手动录入）', legacy: true });
+        rentTaken[label] = true;
+      }
+      if (net > 0 && !netTaken[mon]) {
+        u.netPayments.push({ id: Date.now() + (seq++), month: mon, payDate: '', amount: net, provider: '', note: '历史数据（原手动录入）', legacy: true });
+        netTaken[mon] = true;
+      }
+    });
+    db.autoExpenseLegacyMigrated = true;
+  }
+
+  // 团体工资：原来的手填金额转成一条发薪记录，避免改成自动后金额消失
+  if (!db.payrollLegacyMigrated) {
+    const taken = {};
+    db.payrollRecords.forEach(r => {
+      const l = getMonthLabelFromDate(r.date);
+      if (l) taken[l] = true;
+    });
+    db.months.forEach(m => {
+      const mon = parseInt(m.label, 10) || 0;
+      if (!mon) return;
+      const label = mon + '月';
+      const v = Number(m.expenses && m.expenses[PAYROLL_ROW]) || 0;
+      if (v <= 0 || taken[label]) return;
+      const mm = String(mon).padStart(2, '0');
+      db.payrollRecords.push({
+        id: Date.now() + (seq++),
+        date: year + '-' + mm + '-01',
+        name: '（原团体工资）',
+        info: '',
+        joined: '',
+        monthly: 0,
+        period: '整月',
+        amount: v,
+        note: '历史数据（原手动录入）',
+        legacy: true
+      });
+      taken[label] = true;
+    });
+    db.payrollLegacyMigrated = true;
+  }
 }
 
 function syncAutoExpensesToMonths() {
