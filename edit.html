@@ -188,6 +188,7 @@
     <button class="mode-tab" onclick="switchMode('edit')">✏️ 数据录入</button>
     <button class="mode-tab" onclick="switchMode('utilities')">⚡ 水电费明细</button>
     <button class="mode-tab" onclick="switchMode('tuition')">🥋 武术费明细</button>
+    <button class="mode-tab" onclick="switchMode('temple')">🪔 佛堂收入</button>
   </div>
 
   <!-- ============ Report Panel ============ -->
@@ -246,6 +247,11 @@
     <div class="card" id="tuitionMonthCard" style="display:none">
       <h2><span class="h2-left">🥋 武术费月度统计</span></h2>
       <div id="tuitionMonthContent"></div>
+    </div>
+
+    <div class="card" id="templeCard" style="display:none">
+      <h2><span class="h2-left">🪔 佛堂收入明细</span></h2>
+      <div id="templeContent"></div>
     </div>
 
   </div>
@@ -349,6 +355,21 @@
       </div>
       <div style="overflow-x:auto"><table class="edit-table" id="tuitionTable"></table></div>
       <p style="font-size:12px;color:#94a3b8;margin-top:12px">💡 缴费方式支持：现金 / 银行转账 / gcash / 微信 / 支付宝 / 支票 / 其他。修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
+    </div>
+
+  </div>
+
+  <!-- ============ Temple Income Panel ============ -->
+  <div class="edit-panel" id="templePanel">
+
+    <div class="card">
+      <h2>
+        <span class="h2-left">🪔 佛堂收入明细</span>
+        <button class="btn btn-sm btn-outline" onclick="templeModal()">+ 添加佛堂收入</button>
+      </h2>
+      <p style="font-size:13px;color:#64748b;margin-bottom:16px">分类：供灯油 / 祈福牌位 / 功德箱 / 其他；每笔可写备注。修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
+      <div id="templeSummary"></div>
+      <div style="overflow-x:auto"><table class="edit-table" id="templeTable"></table></div>
     </div>
 
   </div>
@@ -573,13 +594,14 @@ function switchMode(mode) {
   document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
   event.target.classList.add('active');
   document.getElementById('reportPanel').classList.toggle('hidden', mode !== 'report');
-  ['editPanel', 'utilitiesPanel', 'tuitionPanel'].forEach(id => {
+  ['editPanel', 'utilitiesPanel', 'tuitionPanel', 'templePanel'].forEach(id => {
     document.getElementById(id).classList.toggle('active', id === mode + 'Panel');
   });
   if (mode === 'report') renderReport();
   else if (mode === 'edit') renderEditTable();
   else if (mode === 'utilities') renderUtilities();
   else if (mode === 'tuition') renderTuition();
+  else if (mode === 'temple') renderTemple();
 }
 
 // ===================== Report Rendering =====================
@@ -685,6 +707,7 @@ function renderReport() {
   renderUtilitiesPublic();
   renderTuitionPublic();
   renderTuitionByMonth();
+  renderTemplePublic();
 }
 
 function renderFindings(totalIncome, totalExpense, totalProfit, profitArr, labels, months) {
@@ -1669,6 +1692,7 @@ async function syncFromCloud() {
       renderEditTable();
       renderUtilities();
       renderTuition();
+      renderTemple();
       showToast('已自动同步云端最新数据');
     } else {
       baseUpdatedAt = Math.max(baseUpdatedAt, remoteTime);
@@ -1995,6 +2019,160 @@ function deleteTuition(id) {
   renderTuition();
   renderReport();
   showToast('已删除');
+}
+
+// ===================== Temple Income (佛堂收入) =====================
+const TEMPLE_CATS = ['供灯油', '祈福牌位', '功德箱', '其他'];
+
+function getTempleRecords() {
+  if (!db.templeRecords) db.templeRecords = [];
+  return db.templeRecords;
+}
+
+function templeTotals(recs) {
+  const byCat = {};
+  TEMPLE_CATS.forEach(c => { byCat[c] = { count: 0, amount: 0 }; });
+  recs.forEach(r => {
+    const c = TEMPLE_CATS.indexOf(r.category) !== -1 ? r.category : '其他';
+    byCat[c].count++;
+    byCat[c].amount += Number(r.amount) || 0;
+  });
+  const total = recs.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+  return { byCat, total };
+}
+
+function renderTemple() {
+  renderTempleSummary();
+  renderTempleTable();
+}
+
+function renderTempleSummary() {
+  const el = document.getElementById('templeSummary');
+  if (!el) return;
+  const recs = getTempleRecords();
+  const t = templeTotals(recs);
+  const chips = TEMPLE_CATS.map(c => `<span style="display:inline-flex;align-items:center;gap:4px;background:#fffbeb;border:1px solid #fde68a;border-radius:999px;padding:4px 12px;font-size:12px;color:#92400e;margin:2px 6px 2px 0">${c} <b style="color:#b45309">${fmtFull(t.byCat[c].amount)}</b><span style="color:#a16207;margin-left:2px">(${t.byCat[c].count} 笔)</span></span>`).join('');
+  el.innerHTML = `<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <div style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;padding:10px 16px">
+        <div style="font-size:12px;color:#64748b">共 ${recs.length} 笔 · 佛堂收入合计</div>
+        <div style="font-size:20px;font-weight:700;color:#b45309">${fmtFull(t.total)}</div>
+      </div>
+      <div style="flex:1;min-width:260px">${chips}</div>
+    </div>`;
+}
+
+function renderTempleTable() {
+  const recs = getTempleRecords();
+  const sorted = [...recs].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.id || 0) - (a.id || 0));
+  const t = templeTotals(recs);
+  let html = `<thead><tr><th>日期</th><th>分类</th><th style="text-align:right">金额（₱）</th><th>备注</th><th></th></tr></thead><tbody>`;
+  if (!sorted.length) {
+    html += `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px">暂无佛堂收入记录，点右上角「+ 添加佛堂收入」录入</td></tr>`;
+  }
+  sorted.forEach(r => {
+    html += `<tr>
+      <td>${escAttr(r.date) || '—'}</td>
+      <td>${escAttr(r.category) || '其他'}</td>
+      <td style="text-align:right">${fmtFull(r.amount)}</td>
+      <td>${escAttr(r.note) || '—'}</td>
+      <td><button class="icon-btn" onclick="templeModal(${r.id})" title="编辑" style="color:#1e40af">✎</button><button class="icon-btn" onclick="deleteTemple(${r.id})" title="删除">✕</button></td>
+    </tr>`;
+  });
+  TEMPLE_CATS.forEach(c => {
+    if (!t.byCat[c].count) return;
+    html += `<tr style="background:#fffbeb;font-weight:600"><td colspan="2">${c} 小计（${t.byCat[c].count} 笔）</td><td style="text-align:right">${fmtFull(t.byCat[c].amount)}</td><td colspan="2"></td></tr>`;
+  });
+  html += `<tr class="row-total"><td colspan="2">合计</td><td style="text-align:right">${fmtFull(t.total)}</td><td colspan="2"></td></tr></tbody>`;
+  document.getElementById('templeTable').innerHTML = html;
+}
+
+let _editingTempleId = null;
+
+function templeModal(id) {
+  _editingTempleId = id || null;
+  const rec = id ? getTempleRecords().find(r => r.id === id) : null;
+  // 保留历史数据里的自定义分类，避免编辑时被静默改成第一个默认分类
+  const catList = TEMPLE_CATS.slice();
+  if (rec && rec.category && catList.indexOf(rec.category) === -1) catList.push(rec.category);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <h3>${rec ? '✎ 编辑佛堂收入' : '🪔 添加佛堂收入'}</h3>
+    <div class="form-row">
+      <div class="form-group"><label>日期</label><input id="tp_date" type="date" value="${rec ? rec.date || '' : ''}"></div>
+      <div class="form-group"><label>分类</label><select id="tp_category">${catList.map(c => `<option value="${c}" ${rec && rec.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+    </div>
+    <div class="form-group"><label>金额（₱）</label><input id="tp_amount" type="number" value="${rec ? rec.amount || '' : ''}" placeholder="0"></div>
+    <div class="form-group"><label>备注</label><input id="tp_note" value="${rec ? escAttr(rec.note) : ''}" placeholder="可空，如：某某居士供灯油"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      <button class="btn btn-primary" onclick="saveTemple()">${rec ? '保存修改' : '添加'}</button>
+    </div>`;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  setTimeout(() => { const el = document.getElementById('tp_date'); if (el) el.focus(); }, 50);
+}
+
+function saveTemple() {
+  const date = document.getElementById('tp_date').value;
+  const category = document.getElementById('tp_category').value;
+  const amount = parseFloat(document.getElementById('tp_amount').value) || 0;
+  const note = document.getElementById('tp_note').value.trim();
+  if (!date) { showToast('请选择日期'); return; }
+  if (!amount) { showToast('请输入金额'); return; }
+  const recs = getTempleRecords();
+  if (_editingTempleId) {
+    const rec = recs.find(r => r.id === _editingTempleId);
+    if (rec) Object.assign(rec, { date, category, amount, note });
+    showToast('已更新佛堂收入记录，记得保存到云端');
+  } else {
+    recs.push({ id: Date.now(), date, category, amount, note });
+    showToast('已添加佛堂收入记录，记得保存到云端');
+  }
+  saveData();
+  document.querySelector('.modal-overlay').remove();
+  renderTemple();
+  renderReport();
+}
+
+function deleteTemple(id) {
+  if (!confirm('确认删除这条佛堂收入记录？')) return;
+  db.templeRecords = getTempleRecords().filter(r => r.id !== id);
+  saveData();
+  renderTemple();
+  renderReport();
+  showToast('已删除');
+}
+
+function renderTemplePublic() {
+  const card = document.getElementById('templeCard');
+  if (!card) return;
+  const recs = getTempleRecords();
+  if (!recs.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const sorted = [...recs].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.id || 0) - (a.id || 0));
+  const t = templeTotals(recs);
+  let html = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+    <div style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;padding:12px 18px">
+      <div style="font-size:12px;color:#64748b">共 ${recs.length} 笔 · 佛堂收入合计</div>
+      <div style="font-size:24px;font-weight:700;color:#b45309">${fmtFull(t.total)}</div>
+    </div>
+  </div>`;
+  html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin-bottom:10px">🪔 按分类统计</div><div style="overflow-x:auto"><table><thead><tr><th>分类</th><th>笔数</th><th>金额</th><th>占比</th></tr></thead><tbody>';
+  TEMPLE_CATS.forEach(c => {
+    const v = t.byCat[c];
+    html += `<tr><td>${c}</td><td>${v.count}</td><td>${fmtFull(v.amount)}</td><td>${t.total > 0 ? (v.amount / t.total * 100).toFixed(1) + '%' : '—'}</td></tr>`;
+  });
+  html += `<tr class="row-total"><td>合计</td><td>${recs.length}</td><td>${fmtFull(t.total)}</td><td>100%</td></tr></tbody></table></div>`;
+  html += '<div style="font-size:15px;font-weight:700;color:#1e40af;margin:18px 0 10px">📋 收入明细记录</div><div style="overflow-x:auto"><table><thead><tr><th>日期</th><th>分类</th><th>金额</th><th>备注</th></tr></thead><tbody>';
+  sorted.forEach(r => {
+    html += `<tr><td>${escAttr(r.date) || '—'}</td><td>${escAttr(r.category) || '—'}</td><td>${fmtFull(r.amount)}</td><td>${escAttr(r.note) || '—'}</td></tr>`;
+  });
+  html += `<tr class="row-total"><td colspan="2">合计</td><td>${fmtFull(t.total)}</td><td></td></tr></tbody></table></div>`;
+  document.getElementById('templeContent').innerHTML = html;
 }
 
 // ===================== Toast =====================
