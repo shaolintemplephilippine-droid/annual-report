@@ -1058,10 +1058,15 @@ function renderEditTable() {
   // Expense section
   html += `<tr class="section-row"><td colspan="${colCount}">支出项</td></tr>`;
   db.expenseCats.forEach((cat, ci) => {
-    html += `<tr class="row-cat"><td class="cat-name">${cat}<button class="icon-btn" onclick="deleteCat('expense','${cat}')" title="删除" style="margin-left:4px">✕</button></td>`;
+    const isAuto = AUTO_EXPENSE_ROWS.indexOf(cat) !== -1;
+    html += `<tr class="row-cat"><td class="cat-name">${cat}${isAuto
+      ? '<span title="由明细账本按日期自动汇总" style="margin-left:6px;font-size:11px;color:#15803d;background:#dcfce7;border-radius:4px;padding:1px 5px">自动</span>'
+      : `<button class="icon-btn" onclick="deleteCat('expense','${cat}')" title="删除" style="margin-left:4px">✕</button>`}</td>`;
     months.forEach((m, mi) => {
       const v = m.expenses && m.expenses[cat];
-      html += `<td><input type="number" value="${v||''}" placeholder="0" oninput="updateCell('expense',${mi},'${cat}',this.value)"></td>`;
+      html += isAuto
+        ? `<td style="color:#15803d;font-weight:600;text-align:right;padding-right:8px">${v ? fmt(v) : '<span style="color:#cbd5e1">—</span>'}</td>`
+        : `<td><input type="number" value="${v||''}" placeholder="0" oninput="updateCell('expense',${mi},'${cat}',this.value)"></td>`;
     });
     html += `<td class="col-total">${fmt(getCatTotal(cat,'expense'))}</td></tr>`;
   });
@@ -2304,6 +2309,7 @@ function savePayroll() {
     recs.push({ id: Date.now(), date, name, info, joined, monthly, period, amount, note });
     showToast('已添加发薪记录，记得保存到云端');
   }
+  syncAutoExpensesToMonths();
   saveData();
   document.querySelector('.modal-overlay').remove();
   renderPayroll();
@@ -2313,6 +2319,7 @@ function savePayroll() {
 function deletePayroll(id) {
   if (!confirm('确认删除这条发薪记录？')) return;
   db.payrollRecords = getPayrollRecords().filter(r => r.id !== id);
+  syncAutoExpensesToMonths();
   saveData();
   renderPayroll();
   renderReport();
@@ -2413,6 +2420,7 @@ function saveRent() {
     recs.push({ id: Date.now(), date, period, amount, payee, note });
     showToast('已添加房租记录，记得保存到云端');
   }
+  syncAutoExpensesToMonths();
   saveData();
   document.querySelector('.modal-overlay').remove();
   renderRent();
@@ -2422,6 +2430,7 @@ function saveRent() {
 function deleteRent(id) {
   if (!confirm('确认删除这条房租交款记录？')) return;
   db.rentRecords = getRentRecords().filter(r => r.id !== id);
+  syncAutoExpensesToMonths();
   saveData();
   renderRent();
   renderReport();
@@ -2444,6 +2453,7 @@ function addNetPay() {
   if (!u.netPayments) u.netPayments = [];
   const now = new Date();
   u.netPayments.push({ id: Date.now(), month: now.getMonth() + 1, payDate: '', amount: 0, provider: '', note: '' });
+  syncAutoExpensesToMonths();
   saveData();
   renderNetPayTable();
   showToast('已添加网费记录，直接在表格里填写即可');
@@ -2460,6 +2470,7 @@ function updateNetPay(id, field, value) {
   } else {
     n[field] = value;
   }
+  syncAutoExpensesToMonths();
   saveData();
   updateNetPayTotals();
 }
@@ -2468,6 +2479,7 @@ function deleteNetPay(id) {
   if (!confirm('确认删除这条网费记录？')) return;
   const u = getUtilities();
   u.netPayments = getNetPayments().filter(x => x.id !== id);
+  syncAutoExpensesToMonths();
   saveData();
   renderNetPayTable();
   showToast('已删除');
@@ -2505,6 +2517,88 @@ function updateNetPayTotals() {
   if (!tr) return;
   const td = tr.querySelectorAll('td')[2];
   if (td) td.innerHTML = fmt2(netPayTotal());
+}
+
+// ===================== 明细账本 → 月度支出自动汇总 =====================
+// 菲籍员工工资 / 房租 / 网费 三个明细账本，按日期自动汇总进「数据录入」的月度支出行
+const PAYROLL_ROW = '菲籍员工工资';
+const AUTO_EXPENSE_ROWS = [PAYROLL_ROW, '房租', '网费'];
+
+function autoUtilities() {
+  if (!db.utilities) db.utilities = { meters: [], electricBills: {}, electricPayments: [], waterPayments: [], netPayments: [], nextId: { electric: 1, water: 1 } };
+  if (!db.utilities.netPayments) db.utilities.netPayments = [];
+  return db.utilities;
+}
+
+function ensureAutoExpenseCats() {
+  if (!db.expenseCats) db.expenseCats = [];
+  AUTO_EXPENSE_ROWS.forEach(c => {
+    if (db.expenseCats.indexOf(c) === -1) db.expenseCats.push(c);
+  });
+}
+
+// 旧版手动录入的房租 / 网费金额转成明细记录，保证汇总前后总额不变（只跑一次）
+function migrateLegacyAutoExpenses() {
+  if (db.autoExpenseLegacyMigrated) return;
+  if (!db.months) db.months = [];
+  if (!db.rentRecords) db.rentRecords = [];
+  const u = autoUtilities();
+  const RENT = '房租', NET = '网费';
+  const year = Number(db.year) || new Date().getFullYear();
+  const rentTaken = {}, netTaken = {};
+  db.rentRecords.forEach(r => { if (r.period) rentTaken[r.period] = true; });
+  u.netPayments.forEach(n => { const mon = Number(n.month) || 0; if (mon) netTaken[mon] = true; });
+  let seq = 0;
+  db.months.forEach(m => {
+    const mon = parseInt(m.label, 10) || 0;
+    if (!mon) return;
+    const label = mon + '月';
+    const mm = String(mon).padStart(2, '0');
+    const rent = Number(m.expenses && m.expenses[RENT]) || 0;
+    const net = Number(m.expenses && m.expenses[NET]) || 0;
+    if (rent > 0 && !rentTaken[label]) {
+      db.rentRecords.push({ id: Date.now() + (seq++), date: year + '-' + mm + '-01', period: label, amount: rent, payee: '', note: '历史数据（原手动录入）', legacy: true });
+      rentTaken[label] = true;
+    }
+    if (net > 0 && !netTaken[mon]) {
+      u.netPayments.push({ id: Date.now() + (seq++), month: mon, payDate: '', amount: net, provider: '', note: '历史数据（原手动录入）', legacy: true });
+      netTaken[mon] = true;
+    }
+  });
+  db.autoExpenseLegacyMigrated = true;
+}
+
+function syncAutoExpensesToMonths() {
+  if (!db.months) return;
+  const u = autoUtilities();
+  const RENT = '房租', NET = '网费';
+  const monthMap = {};
+  db.months.forEach((m, idx) => { monthMap[m.label] = idx; });
+  if (!db.expenseCats) db.expenseCats = [];
+  AUTO_EXPENSE_ROWS.forEach(c => { if (db.expenseCats.indexOf(c) === -1) db.expenseCats.push(c); });
+  db.months.forEach(m => {
+    if (!m.expenses) m.expenses = {};
+    AUTO_EXPENSE_ROWS.forEach(c => { m.expenses[c] = 0; });
+  });
+  const addTo = (label, cat, amount) => {
+    if (!label || monthMap[label] === undefined) return;
+    db.months[monthMap[label]].expenses[cat] += Number(amount) || 0;
+  };
+  (db.payrollRecords || []).forEach(r => addTo(getMonthLabelFromDate(r.date), PAYROLL_ROW, r.amount));
+  (db.rentRecords || []).forEach(r => {
+    addTo(monthMap[r.period] !== undefined ? r.period : getMonthLabelFromDate(r.date), RENT, r.amount);
+  });
+  u.netPayments.forEach(n => {
+    const mon = Number(n.month) || 0;
+    if (mon) addTo(mon + '月', NET, n.amount);
+  });
+}
+
+// 载入数据后统一走一遍：补齐支出项 → 迁移旧的手动金额 → 按日期汇总
+function autoExpensesBootstrap() {
+  ensureAutoExpenseCats();
+  migrateLegacyAutoExpenses();
+  syncAutoExpensesToMonths();
 }
 
 // ===================== Temple Income (佛堂收入) =====================
@@ -2570,6 +2664,7 @@ function templeBootstrap() {
   migrateLegacyGongdexiang();
   ensureTempleIncomeCats();
   syncTempleToMonths();
+  autoExpensesBootstrap();
 }
 
 function getTempleRecords() {
