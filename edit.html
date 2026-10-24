@@ -800,7 +800,7 @@ function renderDetailTable(labels) {
   html += `<tr class="section-row" style="background:#f0fdf4;color:#16a34a"><td colspan="${colCount}">收入项 / Income</td></tr>`;
   db.incomeCats.forEach(cat => {
     const rowTotal = getCatTotal(cat, 'income');
-    html += `<tr class="row-in"><td>${cat}收入</td>`;
+    html += `<tr class="row-in"><td>${cat.slice(-2) === '收入' ? cat : cat + '收入'}</td>`;
     months.forEach(m => {
       const v = m.income && m.income[cat];
       html += `<td>${v ? fmt(v) : '<span style="color:#cbd5e1">—</span>'}</td>`;
@@ -1007,7 +1007,7 @@ function renderEditTable() {
   // Income section
   html += `<tr class="section-row" style="background:#f0fdf4;color:#16a34a"><td colspan="${colCount}">收入项</td></tr>`;
   db.incomeCats.forEach((cat, ci) => {
-    const isAuto = TEMPLE_CATS.indexOf(cat) !== -1;
+    const isAuto = cat === '佛堂收入';
     html += `<tr class="row-cat"><td class="cat-name">${cat}${isAuto
       ? '<span title="由「佛堂收入」明细按日期自动汇总" style="margin-left:6px;font-size:11px;color:#15803d;background:#dcfce7;border-radius:4px;padding:1px 5px">自动</span>'
       : `<button class="icon-btn" onclick="deleteCat('income','${cat}')" title="删除" style="margin-left:4px">✕</button>`}</td>`;
@@ -2030,15 +2030,17 @@ function deleteTuition(id) {
 // ===================== Temple Income (佛堂收入) =====================
 const TEMPLE_CATS = ['供灯油', '祈福牌位', '功德箱', '其他'];
 
-// 佛堂收入四项自动汇总进月度收入表：先清零再按日期累加（与武术费同一套逻辑）
+// 佛堂收入（供灯油/祈福牌位/功德箱/其他 四项明细的合计）自动汇总进月度收入表
+const TEMPLE_ROW = '佛堂收入';
+
 function ensureTempleIncomeCats() {
   if (!db.incomeCats) db.incomeCats = [];
-  const others = db.incomeCats.filter(c => TEMPLE_CATS.indexOf(c) === -1 && c !== '武术学费');
+  const others = db.incomeCats.filter(c => TEMPLE_CATS.indexOf(c) === -1 && c !== TEMPLE_ROW && c !== '武术学费');
   const keepTuition = db.incomeCats.indexOf('武术学费') !== -1;
-  db.incomeCats = TEMPLE_CATS.concat(keepTuition ? ['武术学费'] : [], others);
+  db.incomeCats = [TEMPLE_ROW].concat(keepTuition ? ['武术学费'] : [], others);
 }
 
-// 历史上「功德箱」是按月手动填的，这里一次性转成明细记录：金额与合计完全不变，之后每天自动汇总
+// 历史上「功德箱」是按月手动填的，这里一次性转成明细记录：金额与合计完全不变，之后自动汇总
 function migrateLegacyGongdexiang() {
   if (db.templeLegacyMigrated) return;
   if (!db.templeRecords) db.templeRecords = [];
@@ -2072,17 +2074,18 @@ function syncTempleToMonths() {
   db.months.forEach((m, idx) => { monthMap[m.label] = idx; });
   db.months.forEach(m => {
     if (!m.income) m.income = {};
-    TEMPLE_CATS.forEach(c => { m.income[c] = 0; });
+    // 旧版本曾把四项分别当成收入项，这里清掉，避免和「佛堂收入」重复计一次
+    TEMPLE_CATS.forEach(c => { delete m.income[c]; });
+    m.income[TEMPLE_ROW] = 0;
   });
   db.templeRecords.forEach(r => {
     const label = getMonthLabelFromDate(r.date);
     if (label === null || monthMap[label] === undefined) return;
-    const cat = TEMPLE_CATS.indexOf(r.category) !== -1 ? r.category : '其他';
-    db.months[monthMap[label]].income[cat] += Number(r.amount) || 0;
+    db.months[monthMap[label]].income[TEMPLE_ROW] += Number(r.amount) || 0;
   });
 }
 
-// 载入数据后统一走一遍：迁移旧功德箱 → 补齐四个收入项 → 按月汇总
+// 载入数据后统一走一遍：迁移旧功德箱 → 收入项归一为「佛堂收入」→ 按月汇总
 function templeBootstrap() {
   migrateLegacyGongdexiang();
   ensureTempleIncomeCats();
