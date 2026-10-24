@@ -218,6 +218,16 @@
       <div id="templeContent"></div>
     </div>
 
+    <div class="card" id="payrollCard" style="display:none">
+      <h2><span class="h2-left">👷 菲籍员工工资明细</span></h2>
+      <div id="payrollContent"></div>
+    </div>
+
+    <div class="card" id="rentCard" style="display:none">
+      <h2><span class="h2-left">🏠 房租交款明细</span></h2>
+      <div id="rentContent"></div>
+    </div>
+
   </div>
 
 
@@ -536,6 +546,8 @@ function renderReport() {
   renderTuitionPublic();
   renderTuitionByMonth();
   renderTemplePublic();
+  renderPayrollPublic();
+  renderRentPublic();
 }
 
 function renderFindings(totalIncome, totalExpense, totalProfit, profitArr, labels, months) {
@@ -660,7 +672,7 @@ function renderUtilitiesPublic() {
   const card = document.getElementById('utilitiesCard');
   if (!card) return;
   const u = db.utilities;
-  if (!u || ((!u.meters || !u.meters.length) && (!u.waterPayments || !u.waterPayments.length))) {
+  if (!u || ((!u.meters || !u.meters.length) && (!u.waterPayments || !u.waterPayments.length) && (!u.netPayments || !u.netPayments.length))) {
     card.style.display = 'none';
     return;
   }
@@ -739,6 +751,17 @@ function renderUtilitiesPublic() {
       html += `<tr><td>${w.month}月</td><td>${w.payDate || '—'}</td><td class="amt-ours">${fmt2(w.amount)}</td><td class="amt-extra">${extra ? fmt2(extra) : '<span style="color:#cbd5e1">—</span>'}</td><td class="amt-ours" style="background:#f5f3ff">${fmt2((Number(w.amount) || 0) + extra)}</td><td>${w.billNo || '—'}</td><td>${w.billPeriod || '—'}</td><td>${fmt2(w.totalAmount)}</td><td style="text-align:center">${paid ? '<span class="util-pill pill-paid">✓ 已缴</span>' : '<span class="util-pill pill-pending">待缴</span>'}</td><td>${w.note || '—'}</td></tr>`;
     });
     html += `<tr class="row-total"><td>累计</td><td></td><td style="color:#6d28d9">${fmt2(waterAmt)}</td><td style="color:#ea580c">${waterExtra ? fmt2(waterExtra) : '—'}</td><td style="color:#6d28d9">${fmt2(waterAmt + waterExtra)}</td><td></td><td></td><td>${fmt2(totalBill)}</td><td></td><td></td></tr></tbody></table></div>`;
+  }
+
+  // Internet / broadband bills
+  const nets = (u.netPayments || []).slice().sort((a, b) => (Number(a.month) || 0) - (Number(b.month) || 0));
+  if (nets.length) {
+    const netSum = nets.reduce((a, n) => a + (Number(n.amount) || 0), 0);
+    html += '<div class="util-h" style="background:#e0f2fe;color:#075985;border-left:5px solid #0ea5e9">🌐 网费明细</div><div style="overflow-x:auto"><table><thead><tr><th>月份</th><th>缴费日期</th><th>运营商 / 宽带账号</th><th>备注</th><th style="text-align:right">金额</th></tr></thead><tbody>';
+    nets.forEach(n => {
+      html += `<tr><td>${Number(n.month) || ''}月</td><td>${n.payDate || '—'}</td><td>${escTxt(n.provider) || '—'}</td><td style="color:#64748b">${escTxt(n.note)}</td><td style="text-align:right;font-weight:600">${fmt2(Number(n.amount) || 0)}</td></tr>`;
+    });
+    html += `</tbody></table></div><div style="margin-top:10px;font-size:13px;color:#475569">网费合计：<b style="color:#075985">${fmt2(netSum)}</b></div>`;
   }
 
   document.getElementById('utilitiesContent').innerHTML = html;
@@ -822,6 +845,97 @@ function renderTuitionPublic() {
   html += `<tr class="row-total"><td>合计</td><td colspan="2">${recs.length} 笔</td><td>${fmtFull(total)}</td><td colspan="2"></td></tr></tbody></table></div>`;
 
   document.getElementById('tuitionContent').innerHTML = html;
+}
+
+// ===================== Payroll & Rent (report view) =====================
+const PAY_PERIODS = ['上半月', '下半月', '整月'];
+
+function escTxt(v) {
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function getPayrollRecords() {
+  if (!db.payrollRecords) db.payrollRecords = [];
+  return db.payrollRecords;
+}
+
+function getRentRecords() {
+  if (!db.rentRecords) db.rentRecords = [];
+  return db.rentRecords;
+}
+
+function payrollTotal(recs) {
+  return (recs || getPayrollRecords()).reduce((a, r) => a + (Number(r.amount) || 0), 0);
+}
+
+function payrollByStaff(recs) {
+  const map = {};
+  (recs || getPayrollRecords()).forEach(r => {
+    const key = String(r.name || '').trim() || '（未填姓名）';
+    if (!map[key]) map[key] = { name: key, info: '', joined: '', monthly: 0, count: 0, total: 0 };
+    const g = map[key];
+    if (!g.info && r.info) g.info = r.info;
+    if (!g.joined && r.joined) g.joined = r.joined;
+    if (!g.monthly && Number(r.monthly)) g.monthly = Number(r.monthly);
+    g.count++;
+    g.total += Number(r.amount) || 0;
+  });
+  return Object.values(map).sort((a, b) => b.total - a.total);
+}
+
+function payrollStatBox() {
+  const recs = getPayrollRecords();
+  const staff = payrollByStaff(recs);
+  return `<div class="util-stats">
+    <div class="util-stat" style="background:#eff6ff;border:1px solid #bfdbfe"><div class="util-stat-label" style="color:#1e40af">👷 菲籍员工人数</div><div class="util-stat-value" style="color:#1e40af">${staff.length} 人</div></div>
+    <div class="util-stat" style="background:#ecfdf5;border:1px solid #a7f3d0"><div class="util-stat-label" style="color:#065f46">💵 累计发放工资</div><div class="util-stat-value" style="color:#065f46">${fmt(payrollTotal(recs))}</div></div>
+    <div class="util-stat" style="background:#fef2f2;border:1px solid #fecaca"><div class="util-stat-label" style="color:#991b1b">🧾 发薪笔数</div><div class="util-stat-value" style="color:#991b1b">${recs.length} 笔</div></div>
+  </div>`;
+}
+
+function renderPayrollPublic() {
+  const card = document.getElementById('payrollCard');
+  if (!card) return;
+  const recs = (db.payrollRecords || []).slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  if (!recs.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const staff = payrollByStaff(recs);
+  let html = payrollStatBox();
+  html += '<div class="util-h" style="background:#eff6ff;color:#1e40af;border-left:5px solid #3b82f6">👤 按员工汇总</div><div style="overflow-x:auto"><table><thead><tr><th>姓名</th><th>个人信息</th><th>入职日期</th><th style="text-align:right">月薪</th><th style="text-align:center">发薪次数</th><th style="text-align:right">累计发放</th></tr></thead><tbody>';
+  staff.forEach(g => {
+    html += `<tr><td style="font-weight:600">${escTxt(g.name)}</td><td style="color:#64748b">${escTxt(g.info) || '—'}</td><td style="white-space:nowrap">${g.joined || '—'}</td><td style="text-align:right">${g.monthly ? fmt(g.monthly) : '—'}</td><td style="text-align:center">${g.count}</td><td style="text-align:right;font-weight:700;color:#065f46">${fmt(g.total)}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  html += '<div class="util-h" style="background:#f8fafc;color:#334155;border-left:5px solid #94a3b8">🧾 发薪记录</div><div style="overflow-x:auto"><table><thead><tr><th>发薪日期</th><th>姓名</th><th style="text-align:center">周期</th><th style="text-align:right">本次实发</th><th>备注</th></tr></thead><tbody>';
+  recs.forEach(r => {
+    html += `<tr><td style="white-space:nowrap">${r.date || '—'}</td><td>${escTxt(r.name)}</td><td style="text-align:center">${escTxt(r.period) || '—'}</td><td style="text-align:right;font-weight:600">${fmt(Number(r.amount) || 0)}</td><td style="color:#64748b">${escTxt(r.note)}</td></tr>`;
+  });
+  html += `</tbody></table></div><div style="margin-top:10px;font-size:13px;color:#475569">合计：<b style="color:#065f46">${fmt(payrollTotal(recs))}</b></div>`;
+  document.getElementById('payrollContent').innerHTML = html;
+}
+
+function rentTotal(recs) {
+  return (recs || getRentRecords()).reduce((a, r) => a + (Number(r.amount) || 0), 0);
+}
+
+function renderRentPublic() {
+  const card = document.getElementById('rentCard');
+  if (!card) return;
+  const recs = (db.rentRecords || []).slice().sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+  if (!recs.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const periods = [...new Set(recs.map(r => String(r.period || '未填月份')))];
+  let html = `<div class="util-stats">
+    <div class="util-stat" style="background:#fff7ed;border:1px solid #fed7aa"><div class="util-stat-label" style="color:#9a3412">🏠 累计交房租</div><div class="util-stat-value" style="color:#c2410c">${fmt(rentTotal(recs))}</div></div>
+    <div class="util-stat" style="background:#f8fafc;border:1px solid #e2e8f0"><div class="util-stat-label" style="color:#334155">🧾 交款笔数</div><div class="util-stat-value" style="color:#334155">${recs.length} 笔</div></div>
+    <div class="util-stat" style="background:#eef2ff;border:1px solid #c7d2fe"><div class="util-stat-label" style="color:#3730a3">📅 覆盖月份</div><div class="util-stat-value" style="color:#3730a3">${periods.length} 个</div></div>
+  </div>`;
+  html += '<div class="util-h" style="background:#fff7ed;color:#9a3412;border-left:5px solid #fb923c">🏠 房租交款记录</div><div style="overflow-x:auto"><table><thead><tr><th>交款日期</th><th>所属月份</th><th>收款人</th><th>备注</th><th style="text-align:right">金额</th></tr></thead><tbody>';
+  recs.forEach(r => {
+    html += `<tr><td style="white-space:nowrap">${r.date || '—'}</td><td>${escTxt(r.period) || '—'}</td><td>${escTxt(r.payee) || '—'}</td><td style="color:#64748b">${escTxt(r.note)}</td><td style="text-align:right;font-weight:600">${fmt(Number(r.amount) || 0)}</td></tr>`;
+  });
+  html += `</tbody></table></div><div style="margin-top:10px;font-size:13px;color:#475569">合计：<b style="color:#c2410c">${fmt(rentTotal(recs))}</b></div>`;
+  document.getElementById('rentContent').innerHTML = html;
 }
 
 // ===================== Temple Income (佛堂收入) =====================
