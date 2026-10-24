@@ -219,7 +219,7 @@
     </div>
 
     <div class="card" id="payrollCard" style="display:none">
-      <h2><span class="h2-left">👷 菲籍员工工资明细</span></h2>
+      <h2><span class="h2-left">👷 团体工资明细</span></h2>
       <div id="payrollContent"></div>
     </div>
 
@@ -887,7 +887,7 @@ function payrollStatBox() {
   const recs = getPayrollRecords();
   const staff = payrollByStaff(recs);
   return `<div class="util-stats">
-    <div class="util-stat" style="background:#eff6ff;border:1px solid #bfdbfe"><div class="util-stat-label" style="color:#1e40af">👷 菲籍员工人数</div><div class="util-stat-value" style="color:#1e40af">${staff.length} 人</div></div>
+    <div class="util-stat" style="background:#eff6ff;border:1px solid #bfdbfe"><div class="util-stat-label" style="color:#1e40af">👷 员工人数</div><div class="util-stat-value" style="color:#1e40af">${staff.length} 人</div></div>
     <div class="util-stat" style="background:#ecfdf5;border:1px solid #a7f3d0"><div class="util-stat-label" style="color:#065f46">💵 累计发放工资</div><div class="util-stat-value" style="color:#065f46">${fmt(payrollTotal(recs))}</div></div>
     <div class="util-stat" style="background:#fef2f2;border:1px solid #fecaca"><div class="util-stat-label" style="color:#991b1b">🧾 发薪笔数</div><div class="util-stat-value" style="color:#991b1b">${recs.length} 笔</div></div>
   </div>`;

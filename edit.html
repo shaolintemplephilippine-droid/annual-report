@@ -189,7 +189,7 @@
     <button class="mode-tab" onclick="switchMode('utilities')">⚡ 水电费明细</button>
     <button class="mode-tab" onclick="switchMode('tuition')">🥋 武术费明细</button>
     <button class="mode-tab" onclick="switchMode('temple')">🪔 佛堂收入</button>
-    <button class="mode-tab" onclick="switchMode('payroll')">👷 菲籍员工工资</button>
+    <button class="mode-tab" onclick="switchMode('payroll')">👷 团体工资明细</button>
     <button class="mode-tab" onclick="switchMode('rent')">🏠 房租交款</button>
   </div>
 
@@ -257,7 +257,7 @@
     </div>
 
     <div class="card" id="payrollCard" style="display:none">
-      <h2><span class="h2-left">👷 菲籍员工工资明细</span></h2>
+      <h2><span class="h2-left">👷 团体工资明细</span></h2>
       <div id="payrollContent"></div>
     </div>
 
@@ -400,10 +400,10 @@
 
     <div class="card">
       <h2>
-        <span class="h2-left">👷 菲籍员工工资明细</span>
+        <span class="h2-left">👷 团体工资明细</span>
         <button class="btn btn-sm btn-outline" onclick="payrollModal()">+ 添加发薪记录</button>
       </h2>
-      <p style="font-size:13px;color:#64748b;margin-bottom:16px">菲籍员工一般每半个月发一次工资（上半月 1–15 日 / 下半月 16–月底）：填月薪后会自动带出半个月的实发金额，可再手改。这里每条记录会按发薪日期自动汇总进「数据录入」的团体工资行。修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
+      <p style="font-size:13px;color:#64748b;margin-bottom:16px">一般每半个月发一次工资（上半月 1–15 日 / 下半月 16–月底）：填月薪后会自动带出半个月的实发金额，可再手改。这里每条记录会按发薪日期自动汇总进「数据录入」的团体工资行。修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
       <div id="payrollSummary"></div>
       <div style="overflow-x:auto"><table class="edit-table" id="payrollTable"></table></div>
     </div>
@@ -2141,7 +2141,7 @@ function payrollStatBox() {
   const recs = getPayrollRecords();
   const staff = payrollByStaff(recs);
   return `<div class="util-stats">
-    <div class="util-stat" style="background:#eff6ff;border:1px solid #bfdbfe"><div class="util-stat-label" style="color:#1e40af">👷 菲籍员工人数</div><div class="util-stat-value" style="color:#1e40af">${staff.length} 人</div></div>
+    <div class="util-stat" style="background:#eff6ff;border:1px solid #bfdbfe"><div class="util-stat-label" style="color:#1e40af">👷 员工人数</div><div class="util-stat-value" style="color:#1e40af">${staff.length} 人</div></div>
     <div class="util-stat" style="background:#ecfdf5;border:1px solid #a7f3d0"><div class="util-stat-label" style="color:#065f46">💵 累计发放工资</div><div class="util-stat-value" style="color:#065f46">${fmt(payrollTotal(recs))}</div></div>
     <div class="util-stat" style="background:#fef2f2;border:1px solid #fecaca"><div class="util-stat-label" style="color:#991b1b">🧾 发薪笔数</div><div class="util-stat-value" style="color:#991b1b">${recs.length} 笔</div></div>
   </div>`;
