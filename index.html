@@ -827,6 +827,65 @@ function renderTuitionPublic() {
 // ===================== Temple Income (佛堂收入) =====================
 const TEMPLE_CATS = ['供灯油', '祈福牌位', '功德箱', '其他'];
 
+// 佛堂收入四项自动汇总进月度收入表：先清零再按日期累加（与武术费同一套逻辑）
+function ensureTempleIncomeCats() {
+  if (!db.incomeCats) db.incomeCats = [];
+  const others = db.incomeCats.filter(c => TEMPLE_CATS.indexOf(c) === -1 && c !== '武术学费');
+  const keepTuition = db.incomeCats.indexOf('武术学费') !== -1;
+  db.incomeCats = TEMPLE_CATS.concat(keepTuition ? ['武术学费'] : [], others);
+}
+
+// 历史上「功德箱」是按月手动填的，这里一次性转成明细记录：金额与合计完全不变，之后每天自动汇总
+function migrateLegacyGongdexiang() {
+  if (db.templeLegacyMigrated) return;
+  if (!db.templeRecords) db.templeRecords = [];
+  if (!db.months) db.months = [];
+  const year = Number(db.year) || new Date().getFullYear();
+  const taken = {};
+  db.templeRecords.forEach(r => {
+    if (r.category === '功德箱') taken[getMonthLabelFromDate(r.date)] = true;
+  });
+  let seq = 0;
+  db.months.forEach(m => {
+    const v = Number(m.income && m.income['功德箱']) || 0;
+    if (v <= 0 || taken[m.label]) return;
+    const mon = String(parseInt(m.label, 10) || 1).padStart(2, '0');
+    db.templeRecords.push({
+      id: Date.now() + (seq++),
+      date: year + '-' + mon + '-01',
+      category: '功德箱',
+      amount: v,
+      note: '历史数据（原手动录入）',
+      legacy: true
+    });
+  });
+  db.templeLegacyMigrated = true;
+}
+
+function syncTempleToMonths() {
+  if (!db.months) return;
+  if (!db.templeRecords) db.templeRecords = [];
+  const monthMap = {};
+  db.months.forEach((m, idx) => { monthMap[m.label] = idx; });
+  db.months.forEach(m => {
+    if (!m.income) m.income = {};
+    TEMPLE_CATS.forEach(c => { m.income[c] = 0; });
+  });
+  db.templeRecords.forEach(r => {
+    const label = getMonthLabelFromDate(r.date);
+    if (label === null || monthMap[label] === undefined) return;
+    const cat = TEMPLE_CATS.indexOf(r.category) !== -1 ? r.category : '其他';
+    db.months[monthMap[label]].income[cat] += Number(r.amount) || 0;
+  });
+}
+
+// 载入数据后统一走一遍：迁移旧功德箱 → 补齐四个收入项 → 按月汇总
+function templeBootstrap() {
+  migrateLegacyGongdexiang();
+  ensureTempleIncomeCats();
+  syncTempleToMonths();
+}
+
 function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
 function getTempleRecords() {
@@ -891,6 +950,7 @@ async function syncFromCloud(silent) {
     const localTime = db.updatedAt || 0;
     if (remoteTime > localTime) {
       db = remote;
+      templeBootstrap();
       syncTuitionToMonths();
       persistDb();
       renderReport();
@@ -914,6 +974,7 @@ function showToast(msg) {
 
 // ===================== Init =====================
 initSupabase();
+templeBootstrap();
 renderReport();
 syncFromCloud(true); // 初次静默同步
 setInterval(() => syncFromCloud(true), 60000); // 每分钟自动检查云端更新

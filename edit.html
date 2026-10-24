@@ -1007,10 +1007,15 @@ function renderEditTable() {
   // Income section
   html += `<tr class="section-row" style="background:#f0fdf4;color:#16a34a"><td colspan="${colCount}">收入项</td></tr>`;
   db.incomeCats.forEach((cat, ci) => {
-    html += `<tr class="row-cat"><td class="cat-name">${cat}<button class="icon-btn" onclick="deleteCat('income','${cat}')" title="删除" style="margin-left:4px">✕</button></td>`;
+    const isAuto = TEMPLE_CATS.indexOf(cat) !== -1;
+    html += `<tr class="row-cat"><td class="cat-name">${cat}${isAuto
+      ? '<span title="由「佛堂收入」明细按日期自动汇总" style="margin-left:6px;font-size:11px;color:#15803d;background:#dcfce7;border-radius:4px;padding:1px 5px">自动</span>'
+      : `<button class="icon-btn" onclick="deleteCat('income','${cat}')" title="删除" style="margin-left:4px">✕</button>`}</td>`;
     months.forEach((m, mi) => {
       const v = m.income && m.income[cat];
-      html += `<td><input type="number" value="${v||''}" placeholder="0" oninput="updateCell('income',${mi},'${cat}',this.value)"></td>`;
+      html += isAuto
+        ? `<td style="color:#15803d;font-weight:600;text-align:right;padding-right:8px">${v ? fmt(v) : '<span style="color:#cbd5e1">—</span>'}</td>`
+        : `<td><input type="number" value="${v||''}" placeholder="0" oninput="updateCell('income',${mi},'${cat}',this.value)"></td>`;
     });
     html += `<td class="col-total">${fmt(getCatTotal(cat,'income'))}</td></tr>`;
   });
@@ -1684,6 +1689,7 @@ async function syncFromCloud() {
         if (!useRemote) { baseUpdatedAt = Math.max(baseUpdatedAt, remoteTime); return; }
       }
       db = remote;
+      templeBootstrap();
       syncTuitionToMonths();
       persistDb();
       localStorage.setItem(LAST_SYNC_KEY, String(remoteTime));
@@ -2024,6 +2030,65 @@ function deleteTuition(id) {
 // ===================== Temple Income (佛堂收入) =====================
 const TEMPLE_CATS = ['供灯油', '祈福牌位', '功德箱', '其他'];
 
+// 佛堂收入四项自动汇总进月度收入表：先清零再按日期累加（与武术费同一套逻辑）
+function ensureTempleIncomeCats() {
+  if (!db.incomeCats) db.incomeCats = [];
+  const others = db.incomeCats.filter(c => TEMPLE_CATS.indexOf(c) === -1 && c !== '武术学费');
+  const keepTuition = db.incomeCats.indexOf('武术学费') !== -1;
+  db.incomeCats = TEMPLE_CATS.concat(keepTuition ? ['武术学费'] : [], others);
+}
+
+// 历史上「功德箱」是按月手动填的，这里一次性转成明细记录：金额与合计完全不变，之后每天自动汇总
+function migrateLegacyGongdexiang() {
+  if (db.templeLegacyMigrated) return;
+  if (!db.templeRecords) db.templeRecords = [];
+  if (!db.months) db.months = [];
+  const year = Number(db.year) || new Date().getFullYear();
+  const taken = {};
+  db.templeRecords.forEach(r => {
+    if (r.category === '功德箱') taken[getMonthLabelFromDate(r.date)] = true;
+  });
+  let seq = 0;
+  db.months.forEach(m => {
+    const v = Number(m.income && m.income['功德箱']) || 0;
+    if (v <= 0 || taken[m.label]) return;
+    const mon = String(parseInt(m.label, 10) || 1).padStart(2, '0');
+    db.templeRecords.push({
+      id: Date.now() + (seq++),
+      date: year + '-' + mon + '-01',
+      category: '功德箱',
+      amount: v,
+      note: '历史数据（原手动录入）',
+      legacy: true
+    });
+  });
+  db.templeLegacyMigrated = true;
+}
+
+function syncTempleToMonths() {
+  if (!db.months) return;
+  if (!db.templeRecords) db.templeRecords = [];
+  const monthMap = {};
+  db.months.forEach((m, idx) => { monthMap[m.label] = idx; });
+  db.months.forEach(m => {
+    if (!m.income) m.income = {};
+    TEMPLE_CATS.forEach(c => { m.income[c] = 0; });
+  });
+  db.templeRecords.forEach(r => {
+    const label = getMonthLabelFromDate(r.date);
+    if (label === null || monthMap[label] === undefined) return;
+    const cat = TEMPLE_CATS.indexOf(r.category) !== -1 ? r.category : '其他';
+    db.months[monthMap[label]].income[cat] += Number(r.amount) || 0;
+  });
+}
+
+// 载入数据后统一走一遍：迁移旧功德箱 → 补齐四个收入项 → 按月汇总
+function templeBootstrap() {
+  migrateLegacyGongdexiang();
+  ensureTempleIncomeCats();
+  syncTempleToMonths();
+}
+
 function getTempleRecords() {
   if (!db.templeRecords) db.templeRecords = [];
   return db.templeRecords;
@@ -2132,17 +2197,21 @@ function saveTemple() {
     recs.push({ id: Date.now(), date, category, amount, note });
     showToast('已添加佛堂收入记录，记得保存到云端');
   }
+  syncTempleToMonths();
   saveData();
   document.querySelector('.modal-overlay').remove();
   renderTemple();
+  renderEditTable();
   renderReport();
 }
 
 function deleteTemple(id) {
   if (!confirm('确认删除这条佛堂收入记录？')) return;
   db.templeRecords = getTempleRecords().filter(r => r.id !== id);
+  syncTempleToMonths();
   saveData();
   renderTemple();
+  renderEditTable();
   renderReport();
   showToast('已删除');
 }
@@ -2189,6 +2258,7 @@ function showToast(msg) {
 // ===================== Init =====================
 initSupabase();
 localStorage.removeItem('annual_report_gh_token_v1'); // 清理旧版 GitHub 令牌
+templeBootstrap();
 renderReport();
 
 (async function initEditPage() {
