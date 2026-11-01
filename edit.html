@@ -390,6 +390,7 @@
       </h2>
       <p style="font-size:13px;color:#64748b;margin-bottom:16px">分类：供灯油 / 祈福牌位 / 功德箱 / 其他；每笔可写备注。修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
       <div id="templeSummary"></div>
+      <div id="templeMonthly"></div>
       <div style="overflow-x:auto"><table class="edit-table" id="templeTable"></table></div>
     </div>
 
@@ -2726,7 +2727,96 @@ function templeTotals(recs) {
 
 function renderTemple() {
   renderTempleSummary();
+  renderTempleMonthly();
   renderTempleTable();
+}
+
+// ===== 每月佛堂收入自动统计（只读汇总，数据仍来自 templeRecords） =====
+// 把「×月」的标签还原成 0-11 的月份下标；没有日期或日期无法识别时返回 null，
+// 这样这类记录会被单独统计进「未填日期」，各月份之和始终等于总合计。
+function monthIndexOfDate(dateStr) {
+  const label = getMonthLabelFromDate(dateStr);
+  if (!label) return null;
+  const n = parseInt(label, 10);
+  return (n >= 1 && n <= 12) ? n - 1 : null;
+}
+
+function templeMonthlyTotals(recs) {
+  const buckets = UTIL_MONTHS.map((label, idx) => ({ idx, label, amount: 0, count: 0 }));
+  const undated = { label: '未填日期', amount: 0, count: 0 };
+  const years = [];
+  let total = 0;
+  (recs || []).forEach(r => {
+    const amount = Number(r.amount) || 0;
+    total += amount;
+    const idx = monthIndexOfDate(r.date);
+    if (idx === null) {
+      undated.amount += amount;
+      undated.count++;
+      return;
+    }
+    buckets[idx].amount += amount;
+    buckets[idx].count++;
+    const y = String(r.date || '').slice(0, 4);
+    if (/^\d{4}$/.test(y) && years.indexOf(y) === -1) years.push(y);
+  });
+  return { buckets, undated, years, total };
+}
+
+function renderTempleMonthly() {
+  const el = document.getElementById('templeMonthly');
+  if (!el) return;
+  const recs = getTempleRecords();
+  if (!recs.length) { el.innerHTML = ''; return; }
+
+  const s = templeMonthlyTotals(recs);
+  const active = s.buckets.filter(b => b.count > 0);
+  let maxAmount = 0;
+  let maxLabel = '—';
+  active.forEach(b => {
+    if (b.amount > maxAmount) { maxAmount = b.amount; maxLabel = b.label; }
+  });
+  const avg = active.length ? Math.round(s.total / active.length) : 0;
+
+  const tiles = s.buckets.map(b => {
+    const empty = b.count === 0;
+    const isTop = !empty && active.length > 1 && b.amount === maxAmount;
+    const bg = isTop ? '#fef3c7' : (empty ? '#f8fafc' : '#fffbeb');
+    const border = isTop ? '#f59e0b' : (empty ? '#e2e8f0' : '#fde68a');
+    const amountColor = empty ? '#cbd5e1' : '#b45309';
+    return `<div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:8px 10px">
+        <div style="font-size:11px;color:${empty ? '#cbd5e1' : '#a16207'}">${b.label}</div>
+        <div style="font-size:15px;font-weight:700;color:${amountColor};line-height:1.35">${empty ? '—' : fmtFull(b.amount)}</div>
+        <div style="font-size:11px;color:#94a3b8">${empty ? '暂无' : b.count + ' 笔'}</div>
+      </div>`;
+  }).join('');
+
+  const undatedTile = s.undated.count
+    ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px 10px" title="这些记录没有可识别的日期，未计入任何月份">
+        <div style="font-size:11px;color:#b91c1c">${s.undated.label}</div>
+        <div style="font-size:15px;font-weight:700;color:#dc2626;line-height:1.35">${fmtFull(s.undated.amount)}</div>
+        <div style="font-size:11px;color:#94a3b8">${s.undated.count} 笔</div>
+      </div>`
+    : '';
+
+  const yearNote = s.years.length > 1
+    ? `<span style="color:#b45309">注意：记录跨 ${s.years.length} 个年份（${s.years.join(' / ')}），此处按月份合并统计</span>`
+    : '';
+
+  el.innerHTML = `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:700;color:#0f172a">📅 每月佛堂收入（自动统计）</div>
+        <div style="font-size:12px;color:#64748b">按每笔记录日期的月份自动汇总，随录入实时更新</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px">${tiles}${undatedTile}</div>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px dashed #e2e8f0;font-size:13px;color:#475569;display:flex;flex-wrap:wrap;gap:16px">
+        <span>全年合计 <b style="color:#b45309;font-size:15px">${fmtFull(s.total)}</b></span>
+        <span>有收入月份 <b style="color:#0f172a">${active.length}</b> 个</span>
+        <span title="按有收入的月份计算">月均 <b style="color:#0f172a">${active.length ? fmtFull(avg) : '—'}</b></span>
+        <span>最高月份 <b style="color:#0f172a">${maxLabel}${maxAmount > 0 ? ' · ' + fmtFull(maxAmount) : ''}</b></span>
+        ${yearNote}
+      </div>
+    </div>`;
 }
 
 function renderTempleSummary() {
