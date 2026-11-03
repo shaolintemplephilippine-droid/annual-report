@@ -391,6 +391,7 @@
       <p style="font-size:13px;color:#64748b;margin-bottom:16px">分类：供灯油 / 祈福牌位 / 功德箱 / 其他；每笔可写备注。修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
       <div id="templeSummary"></div>
       <div id="templeMonthly"></div>
+      <div id="templeFilter"></div>
       <div style="overflow-x:auto"><table class="edit-table" id="templeTable"></table></div>
     </div>
 
@@ -2728,6 +2729,7 @@ function templeTotals(recs) {
 function renderTemple() {
   renderTempleSummary();
   renderTempleMonthly();
+  renderTempleFilter();
   renderTempleTable();
 }
 
@@ -2784,7 +2786,8 @@ function renderTempleMonthly() {
     const bg = isTop ? '#fef3c7' : (empty ? '#f8fafc' : '#fffbeb');
     const border = isTop ? '#f59e0b' : (empty ? '#e2e8f0' : '#fde68a');
     const amountColor = empty ? '#cbd5e1' : '#b45309';
-    return `<div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:8px 10px">
+    const sel = templeMonthFilter === b.idx;
+    return `<div onclick="templeSetMonthFilter(${b.idx})" title="点击筛选 ${b.label} 明细" style="cursor:pointer;background:${bg};border:1px solid ${border};border-radius:8px;padding:8px 10px${sel ? ';outline:2px solid #b45309;outline-offset:1px' : ''}">
         <div style="font-size:11px;color:${empty ? '#cbd5e1' : '#a16207'}">${b.label}</div>
         <div style="font-size:15px;font-weight:700;color:${amountColor};line-height:1.35">${empty ? '—' : fmtFull(b.amount)}</div>
         <div style="font-size:11px;color:#94a3b8">${empty ? '暂无' : b.count + ' 笔'}</div>
@@ -2792,7 +2795,7 @@ function renderTempleMonthly() {
   }).join('');
 
   const undatedTile = s.undated.count
-    ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px 10px" title="这些记录没有可识别的日期，未计入任何月份">
+    ? `<div onclick="templeSetMonthFilter('undated')" style="cursor:pointer;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px 10px${templeMonthFilter === 'undated' ? ';outline:2px solid #b91c1c;outline-offset:1px' : ''}" title="这些记录没有可识别的日期，未计入任何月份，点击筛选">
         <div style="font-size:11px;color:#b91c1c">${s.undated.label}</div>
         <div style="font-size:15px;font-weight:700;color:#dc2626;line-height:1.35">${fmtFull(s.undated.amount)}</div>
         <div style="font-size:11px;color:#94a3b8">${s.undated.count} 笔</div>
@@ -2806,7 +2809,7 @@ function renderTempleMonthly() {
   el.innerHTML = `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:18px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:12px">
         <div style="font-size:14px;font-weight:700;color:#0f172a">📅 每月佛堂收入（自动统计）</div>
-        <div style="font-size:12px;color:#64748b">按每笔记录日期的月份自动汇总，随录入实时更新</div>
+        <div style="font-size:12px;color:#64748b">按每笔记录日期的月份自动汇总，随录入实时更新；点击月份可筛选下方明细</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px">${tiles}${undatedTile}</div>
       <div style="margin-top:12px;padding-top:10px;border-top:1px dashed #e2e8f0;font-size:13px;color:#475569;display:flex;flex-wrap:wrap;gap:16px">
@@ -2816,6 +2819,75 @@ function renderTempleMonthly() {
         <span>最高月份 <b style="color:#0f172a">${maxLabel}${maxAmount > 0 ? ' · ' + fmtFull(maxAmount) : ''}</b></span>
         ${yearNote}
       </div>
+    </div>`;
+}
+
+// ===== 佛堂收入月份筛选（只筛下方明细表，不改变每月统计的全量口径） =====
+// null = 全部；0-11 = 月份下标（对应 UTIL_MONTHS）；'undated' = 未填日期的记录。
+let templeMonthFilter = null;
+
+function templeFilterLabel() {
+  if (templeMonthFilter === null) return '全部月份';
+  if (templeMonthFilter === 'undated') return '未填日期';
+  return UTIL_MONTHS[templeMonthFilter] || '全部月份';
+}
+
+function templeRecordMatchesFilter(r) {
+  if (templeMonthFilter === null) return true;
+  const idx = monthIndexOfDate(r.date);
+  if (templeMonthFilter === 'undated') return idx === null;
+  return idx === templeMonthFilter;
+}
+
+function templeFilterRecords() {
+  const recs = getTempleRecords();
+  if (templeMonthFilter === null) return recs;
+  return recs.filter(templeRecordMatchesFilter);
+}
+
+function templeSetMonthFilter(value) {
+  templeMonthFilter = (value === null || value === 'undated') ? value : Number(value);
+  renderTemple();
+}
+
+function renderTempleFilter() {
+  const el = document.getElementById('templeFilter');
+  if (!el) return;
+  const recs = getTempleRecords();
+  if (!recs.length) {
+    // 记录被删空时把筛选复位，避免停在一个永远空的月份上
+    templeMonthFilter = null;
+    el.innerHTML = '';
+    return;
+  }
+
+  const s = templeMonthlyTotals(recs);
+  const chip = (value, label, count, amount) => {
+    const arg = value === null ? 'null' : (typeof value === 'number' ? String(value) : `'${value}'`);
+    const on = templeMonthFilter === value;
+    const style = on
+      ? 'background:#f59e0b;border:1px solid #f59e0b;color:#fff'
+      : 'background:#fff;border:1px solid #e2e8f0;color:#475569';
+    return `<button type="button" onclick="templeSetMonthFilter(${arg})" title="${label}：${count} 笔 · ${fmtFull(amount)}"
+        style="${style};border-radius:999px;padding:5px 13px;font-size:12px;line-height:1.4;cursor:pointer">${label}<span style="opacity:.8;margin-left:3px">${count}</span></button>`;
+  };
+
+  // 只列出真正有记录的月份，避免一排点不出东西的空按钮
+  const monthChips = s.buckets.filter(b => b.count > 0).map(b => chip(b.idx, b.label, b.count, b.amount)).join('');
+  const undatedChip = s.undated.count ? chip('undated', s.undated.label, s.undated.count, s.undated.amount) : '';
+
+  const shown = templeFilterRecords();
+  const shownTotal = shown.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+  const status = templeMonthFilter === null
+    ? `<span style="font-size:12px;color:#64748b">显示全部 ${recs.length} 笔 · ${fmtFull(s.total)}</span>`
+    : `<span style="font-size:12px;color:#b45309">已筛选 <b>${templeFilterLabel()}</b> · ${shown.length} 笔 · ${fmtFull(shownTotal)}</span>
+        <button type="button" onclick="templeSetMonthFilter(null)" style="background:none;border:none;padding:0;font-size:12px;color:#2563eb;cursor:pointer;text-decoration:underline">清除筛选</button>`;
+
+  el.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px">
+      <span style="font-size:12px;color:#64748b;font-weight:600">📆 月份筛选</span>
+      ${chip(null, '全部', recs.length, s.total)}${monthChips}${undatedChip}
+      <span style="flex:1;min-width:8px"></span>
+      ${status}
     </div>`;
 }
 
@@ -2835,12 +2907,16 @@ function renderTempleSummary() {
 }
 
 function renderTempleTable() {
-  const recs = getTempleRecords();
+  // 只显示符合月份筛选的记录；分类小计与合计也按筛选结果算，所见即所加
+  const recs = templeFilterRecords();
   const sorted = [...recs].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.id || 0) - (a.id || 0));
   const t = templeTotals(recs);
+  const scopeLabel = templeMonthFilter === null ? '' : '（' + templeFilterLabel() + '）';
   let html = `<thead><tr><th>日期</th><th>分类</th><th style="text-align:right">金额（₱）</th><th>备注</th><th></th></tr></thead><tbody>`;
   if (!sorted.length) {
-    html += `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px">暂无佛堂收入记录，点右上角「+ 添加佛堂收入」录入</td></tr>`;
+    html += templeMonthFilter === null
+      ? `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px">暂无佛堂收入记录，点右上角「+ 添加佛堂收入」录入</td></tr>`
+      : `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px">${templeFilterLabel()} 暂无记录 · <a href="javascript:void(0)" onclick="templeSetMonthFilter(null)" style="color:#2563eb">查看全部</a></td></tr>`;
   }
   sorted.forEach(r => {
     html += `<tr>
@@ -2855,7 +2931,7 @@ function renderTempleTable() {
     if (!t.byCat[c].count) return;
     html += `<tr style="background:#fffbeb;font-weight:600"><td colspan="2">${c} 小计（${t.byCat[c].count} 笔）</td><td style="text-align:right">${fmtFull(t.byCat[c].amount)}</td><td colspan="2"></td></tr>`;
   });
-  html += `<tr class="row-total"><td colspan="2">合计</td><td style="text-align:right">${fmtFull(t.total)}</td><td colspan="2"></td></tr></tbody>`;
+  html += `<tr class="row-total"><td colspan="2">合计${scopeLabel}</td><td style="text-align:right">${fmtFull(t.total)}</td><td colspan="2"></td></tr></tbody>`;
   document.getElementById('templeTable').innerHTML = html;
 }
 
