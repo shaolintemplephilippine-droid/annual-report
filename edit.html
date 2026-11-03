@@ -89,6 +89,16 @@
   .edit-table select:focus { outline: none; border-color: #1e40af; box-shadow: 0 0 0 2px rgba(30,64,175,0.1); }
   .edit-table input[type="date"] { text-align: left; }
 
+  /* 电费明细：前 4 列（客单号 / 电表号 / UNIT / 归属）横向冻结，月份列自由滑动 */
+  .edit-table.matrix-frozen th.fm, .edit-table.matrix-frozen td.fm { position: sticky; z-index: 2; }
+  .edit-table.matrix-frozen th.fm { z-index: 3; }
+  .edit-table.matrix-frozen .fm1 { left: var(--fm0, 0px); }
+  .edit-table.matrix-frozen .fm2 { left: var(--fm1, 148px); }
+  .edit-table.matrix-frozen .fm3 { left: var(--fm2, 268px); }
+  .edit-table.matrix-frozen .fm4 { left: var(--fm3, 334px); }
+  .edit-table.matrix-frozen .fm-edge::after { content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 1px; background: #b6c2d2; }
+  .edit-table.matrix-frozen .fm-edge::before { content: ''; position: absolute; top: 0; bottom: 0; right: -9px; width: 9px; background: linear-gradient(to right, rgba(15,23,42,0.15), rgba(15,23,42,0)); pointer-events: none; }
+
   /* Utilities bright styles */
   .util-tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
   .util-tag-szg { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
@@ -313,7 +323,7 @@
         </div>
       </h2>
       <p style="font-size:13px;color:#64748b;margin-bottom:16px">按客单号录入每月电费（🟣 素斋馆 / 🔵 我方 各电表）；修改自动保存在本机，点「保存到云端」后所有设备同步。</p>
-      <div style="overflow-x:auto"><table class="edit-table" id="electricMatrixTable"></table></div>
+      <div style="overflow-x:auto"><table class="edit-table matrix-frozen" id="electricMatrixTable"></table></div>
     </div>
 
     <div class="card">
@@ -1398,7 +1408,7 @@ function renderUtilities() {
 
 function renderElectricMatrix() {
   const u = getUtilities();
-  let html = `<thead><tr><th style="min-width:120px">客单号</th><th style="min-width:110px;text-align:center">电表号</th><th style="text-align:center">UNIT</th><th style="text-align:center">归属</th>${UTIL_MONTHS.map(m => `<th class="col-month-header">${m}</th>`).join('')}<th style="background:#eff6ff">合计</th></tr></thead><tbody>`;
+  let html = `<thead><tr><th class="fm fm1" style="min-width:120px">客单号</th><th class="fm fm2" style="min-width:110px;text-align:center">电表号</th><th class="fm fm3" style="text-align:center">UNIT</th><th class="fm fm4 fm-edge" style="text-align:center">归属</th>${UTIL_MONTHS.map(m => `<th class="col-month-header">${m}</th>`).join('')}<th style="background:#eff6ff">合计</th></tr></thead><tbody>`;
   if (!u.meters.length) {
     html += `<tr><td colspan="17" style="text-align:center;color:#94a3b8;padding:20px">暂无电表，点右上角「+ 添加电表」或「导入水电费JSON」</td></tr>`;
   }
@@ -1406,7 +1416,7 @@ function renderElectricMatrix() {
     const bills = (u.electricBills || {})[mt.accountNo] || {};
     const total = UTIL_MONTHS.reduce((a, m) => a + (Number(bills[m]) || 0), 0);
     const isSzg = (mt.owner || '我方') === '素斋馆';
-    html += `<tr class="row-cat"><td class="cat-name">${mt.accountNo}<button class="icon-btn" onclick="deleteMeter(${i})" title="删除" style="margin-left:4px">✕</button></td><td style="text-align:center;color:#64748b">${mt.meterNo || '—'}</td><td style="text-align:center">${mt.unit || '—'}</td><td style="text-align:center"><span class="util-tag ${isSzg ? 'util-tag-szg' : 'util-tag-us'}">${mt.owner || '我方'}</span></td>`;
+    html += `<tr class="row-cat"><td class="cat-name fm fm1">${mt.accountNo}<button class="icon-btn" onclick="deleteMeter(${i})" title="删除" style="margin-left:4px">✕</button></td><td class="fm fm2" style="text-align:center;color:#64748b">${mt.meterNo || '—'}</td><td class="fm fm3" style="text-align:center">${mt.unit || '—'}</td><td class="fm fm4 fm-edge" style="text-align:center"><span class="util-tag ${isSzg ? 'util-tag-szg' : 'util-tag-us'}">${mt.owner || '我方'}</span></td>`;
     UTIL_MONTHS.forEach(m => {
       html += `<td><input type="number" value="${bills[m] || ''}" placeholder="0" oninput="updateElectricBill(${i},'${m}',this.value)"></td>`;
     });
@@ -1415,14 +1425,14 @@ function renderElectricMatrix() {
   if (u.meters.length) {
     const groupSum = (owner, m) => u.meters.filter(mt => (mt.owner || '我方') === owner).reduce((a, mt) => a + (Number(((u.electricBills || {})[mt.accountNo] || {})[m]) || 0), 0);
     const mkGroupRow = (label, owner, cls) => {
-      let row = `<tr class="${cls}"><td colspan="4">${label}</td>`;
+      let row = `<tr class="${cls}"><td class="fm fm1 fm-edge" colspan="4">${label}</td>`;
       UTIL_MONTHS.forEach(m => { const s = groupSum(owner, m); row += `<td>${s ? fmt2(s) : '<span style="opacity:.5">—</span>'}</td>`; });
       let g = 0; UTIL_MONTHS.forEach(m => g += groupSum(owner, m));
       return row + `<td>${fmt2(g)}</td></tr>`;
     };
     html += mkGroupRow('我方合计金额', '我方', 'row-us-total');
     html += mkGroupRow('素斋馆合计（参考）', '素斋馆', 'row-szg-total');
-    html += `<tr class="row-total"><td colspan="4">电费总计</td>`;
+    html += `<tr class="row-total"><td class="fm fm1 fm-edge" colspan="4">电费总计</td>`;
     UTIL_MONTHS.forEach(m => {
       const s = groupSum('我方', m) + groupSum('素斋馆', m);
       html += `<td>${s ? fmt2(s) : '<span style="opacity:.5">—</span>'}</td>`;
@@ -1432,7 +1442,23 @@ function renderElectricMatrix() {
   }
   html += '</tbody>';
   document.getElementById('electricMatrixTable').innerHTML = html;
+  syncMatrixFrozenColumns();
 }
+
+// 电费明细：auto 布局下列宽不固定，按真实渲染宽度算出前 4 列的 sticky 偏移
+function syncMatrixFrozenColumns() {
+  const table = document.getElementById('electricMatrixTable');
+  if (!table || !table.tHead || !table.tHead.rows.length) return;
+  const head = table.tHead.rows[0];
+  if (!head.offsetWidth) return; // 面板隐藏时量不到宽度，等面板显示后重新渲染会再算一次
+  let left = 0;
+  ['.fm1', '.fm2', '.fm3', '.fm4'].forEach((sel, i) => {
+    const cell = head.querySelector(sel);
+    table.style.setProperty('--fm' + i, left.toFixed(2) + 'px');
+    if (cell) left += cell.getBoundingClientRect().width;
+  });
+}
+window.addEventListener('resize', syncMatrixFrozenColumns);
 
 function updateElectricBill(meterIdx, month, value) {
   const u = getUtilities();
