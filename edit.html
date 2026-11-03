@@ -1561,7 +1561,7 @@ function deleteMeter(idx) {
 
 function renderWaterPayTable() {
   const u = getUtilities();
-  let html = `<thead><tr><th>月份</th><th>缴费日期</th><th>我方缴费</th><th style="background:#fff7e6">额外承担</th><th>合计我方</th><th>水费单号</th><th>帐单周期</th><th>总水费</th><th>状态</th><th>备注</th><th></th></tr></thead><tbody>`;
+  let html = `<thead><tr><th style="min-width:86px">月份</th><th style="min-width:152px">缴费日期</th><th style="min-width:104px">我方缴费</th><th style="background:#fff7e6;min-width:104px">额外承担</th><th style="min-width:112px">合计我方</th><th style="min-width:136px">水费单号</th><th style="min-width:200px">帐单周期</th><th style="min-width:104px">总水费</th><th style="min-width:88px">状态</th><th style="min-width:220px">备注</th><th style="min-width:44px"></th></tr></thead><tbody>`;
   if (!u.waterPayments.length) {
     html += `<tr><td colspan="11" style="text-align:center;color:#94a3b8;padding:20px">暂无水费记录，点右上角「+ 添加水费记录」</td></tr>`;
   }
@@ -1573,10 +1573,10 @@ function renderWaterPayTable() {
       <td style="background:#fff7e6"><input type="number" value="${w.extraAmount || ''}" placeholder="0" style="color:#ea580c;font-weight:700" oninput="updateWaterPay(${w.id},'extraAmount',this.value)"></td>
       <td style="color:#6d28d9;font-weight:700">${fmt2((Number(w.amount) || 0) + (Number(w.extraAmount) || 0))}</td>
       <td><input type="text" value="${w.billNo || ''}" oninput="updateWaterPay(${w.id},'billNo',this.value)"></td>
-      <td><input type="text" value="${w.billPeriod || ''}" placeholder="如 2026.1.16-2.16" oninput="updateWaterPay(${w.id},'billPeriod',this.value)"></td>
+      <td><input type="text" value="${escAttr(w.billPeriod || '')}" placeholder="如 2026.1.16-2.16" title="${escAttr(w.billPeriod || '')}" style="width:200px" oninput="updateWaterPay(${w.id},'billPeriod',this.value)"></td>
       <td><input type="number" value="${w.totalAmount || ''}" placeholder="0" oninput="updateWaterPay(${w.id},'totalAmount',this.value)"></td>
       <td><select onchange="updateWaterPay(${w.id},'status',this.value)"><option value="pending" ${w.status !== 'paid' ? 'selected' : ''}>待缴</option><option value="paid" ${w.status === 'paid' ? 'selected' : ''}>已缴</option></select></td>
-      <td><input type="text" value="${w.note || ''}" oninput="updateWaterPay(${w.id},'note',this.value)"></td>
+      <td><input type="text" value="${escAttr(w.note || '')}" title="${escAttr(w.note || '')}" style="width:220px" oninput="updateWaterPay(${w.id},'note',this.value)"></td>
       <td><button class="icon-btn" onclick="deleteWaterPay(${w.id})" title="删除">✕</button></td>
     </tr>`;
   });
