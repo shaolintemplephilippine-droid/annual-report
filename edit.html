@@ -1084,7 +1084,7 @@ function renderEditTable() {
   db.expenseCats.forEach((cat, ci) => {
     const isAuto = AUTO_EXPENSE_ROWS.indexOf(cat) !== -1;
     html += `<tr class="row-cat"><td class="cat-name">${cat}${isAuto
-      ? '<span title="由明细账本按日期自动汇总" style="margin-left:6px;font-size:11px;color:#15803d;background:#dcfce7;border-radius:4px;padding:1px 5px">自动</span>'
+      ? '<span title="' + escAttr(AUTO_ROW_TIPS[cat] || '由明细账本按日期自动汇总') + '" style="margin-left:6px;font-size:11px;color:#15803d;background:#dcfce7;border-radius:4px;padding:1px 5px">自动</span>'
       : `<button class="icon-btn" onclick="deleteCat('expense','${cat}')" title="删除" style="margin-left:4px">✕</button>`}</td>`;
     months.forEach((m, mi) => {
       const v = m.expenses && m.expenses[cat];
@@ -1102,9 +1102,9 @@ function renderEditTable() {
   // Income section
   html += `<tr class="section-row" style="background:#f0fdf4;color:#16a34a"><td colspan="${colCount}">收入项</td></tr>`;
   db.incomeCats.forEach((cat, ci) => {
-    const isAuto = cat === '佛堂收入';
+    const isAuto = AUTO_INCOME_ROWS.indexOf(cat) !== -1;
     html += `<tr class="row-cat"><td class="cat-name">${cat}${isAuto
-      ? '<span title="由「佛堂收入」明细按日期自动汇总" style="margin-left:6px;font-size:11px;color:#15803d;background:#dcfce7;border-radius:4px;padding:1px 5px">自动</span>'
+      ? '<span title="' + escAttr(AUTO_ROW_TIPS[cat] || '由明细账本自动汇总') + '" style="margin-left:6px;font-size:11px;color:#15803d;background:#dcfce7;border-radius:4px;padding:1px 5px">自动</span>'
       : `<button class="icon-btn" onclick="deleteCat('income','${cat}')" title="删除" style="margin-left:4px">✕</button>`}</td>`;
     months.forEach((m, mi) => {
       const v = m.income && m.income[cat];
@@ -1317,12 +1317,11 @@ function batchSetTuitionModal() {
   const monthOptions = months.map((m, i) => `<option value="${i}">${m.label}</option>`).join('');
   overlay.innerHTML = `
     <div class="modal">
-      <h3>批量设置武术学费</h3>
-      <p style="font-size:13px;color:#64748b;margin-bottom:12px">为选定的月份统一填入武术学费金额，直接计入当月收入。</p>
+      <h3>批量补录武术学费</h3>
+      <p style="font-size:13px;color:#64748b;margin-bottom:12px">为选定的月份各生成一条「武术费明细」记录（日期取当月 1 日、备注「批量设置」），已录入明细的月份自动跳过，不会覆盖真实学生记录。</p>
       <div class="form-group"><label>每月学费金额（₱）</label><input id="bt_amount" type="number" placeholder="例如 3000" value=""></div>
       <div class="form-group"><label>起始月份</label><select id="bt_start">${monthOptions}</select></div>
       <div class="form-group"><label>结束月份</label><select id="bt_end">${monthOptions}</select></div>
-      <div class="form-group"><label><input type="checkbox" id="bt_overwrite" checked> 覆盖已有数据</label></div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="document.querySelector('.modal-overlay').remove()">取消</button>
         <button class="btn btn-primary" onclick="applyBatchTuition()">应用</button>
@@ -1338,22 +1337,38 @@ function applyBatchTuition() {
   const amount = parseFloat(document.getElementById('bt_amount').value) || 0;
   const startIdx = parseInt(document.getElementById('bt_start').value, 10);
   const endIdx = parseInt(document.getElementById('bt_end').value, 10);
-  const overwrite = document.getElementById('bt_overwrite').checked;
   if (amount <= 0) { showToast('请输入有效金额'); return; }
   if (startIdx > endIdx) { showToast('起始月份不能晚于结束月份'); return; }
-  if (!db.incomeCats.includes('武术学费')) db.incomeCats.push('武术学费');
-  let count = 0;
+  if (!db.incomeCats.includes(TUITION_ROW)) db.incomeCats.push(TUITION_ROW);
+  if (!db.tuitionRecords) db.tuitionRecords = [];
+  const year = Number(db.year) || new Date().getFullYear();
+  const taken = {};
+  db.tuitionRecords.forEach(r => { const l = getMonthLabelFromDate(r.date); if (l) taken[l] = true; });
+  let created = 0, skipped = 0;
   for (let i = startIdx; i <= endIdx; i++) {
     const m = db.months[i];
-    if (!m.income) m.income = {};
-    if (!overwrite && m.income['武术学费']) continue;
-    m.income['武术学费'] = amount;
-    count++;
+    if (!m) continue;
+    if (taken[m.label]) { skipped++; continue; }
+    const mon = String(parseInt(m.label, 10) || 1).padStart(2, '0');
+    db.tuitionRecords.push({
+      id: Date.now() + created,
+      date: year + '-' + mon + '-01',
+      student: '（批量补录）',
+      course: '',
+      amount,
+      method: '其他',
+      account: '',
+      note: '批量设置'
+    });
+    taken[m.label] = true;
+    created++;
   }
+  syncTuitionToMonths();
   saveData();
   renderEditTable();
+  renderTuition();
   document.querySelector('.modal-overlay').remove();
-  showToast(`已设置 ${count} 个月份的武术学费`);
+  showToast(`已补录 ${created} 个月${skipped ? '，跳过已有明细 ' + skipped + ' 个月' : ''}`);
 }
 
 // ===================== Data Management =====================
@@ -1480,6 +1495,7 @@ function updateElectricBill(meterIdx, month, value) {
   if (!u.electricBills[mt.accountNo]) u.electricBills[mt.accountNo] = {};
   const v = value === '' ? 0 : parseFloat(value);
   u.electricBills[mt.accountNo][month] = isNaN(v) ? 0 : v;
+  syncAutoExpensesToMonths();
   saveData();
   updateElectricTotals(meterIdx);
 }
@@ -1579,6 +1595,7 @@ function confirmAddMeter() {
     name: '',
     owner: document.getElementById('mt_owner').value
   });
+  syncAutoExpensesToMonths();
   saveData();
   document.querySelector('.modal-overlay').remove();
   renderElectricMatrix();
@@ -1592,6 +1609,7 @@ function deleteMeter(idx) {
   if (!confirm(`确认删除电表「${mt.accountNo}（${mt.owner || ''}）」？该表所有月份电费数据将被删除。`)) return;
   u.meters.splice(idx, 1);
   if (u.electricBills) delete u.electricBills[mt.accountNo];
+  syncAutoExpensesToMonths();
   saveData();
   renderElectricMatrix();
   showToast('已删除');
@@ -1599,7 +1617,7 @@ function deleteMeter(idx) {
 
 function renderWaterPayTable() {
   const u = getUtilities();
-  let html = `<thead><tr><th style="min-width:86px">月份</th><th style="min-width:152px">缴费日期</th><th style="min-width:104px">我方缴费</th><th style="background:#fff7e6;min-width:104px">额外承担</th><th style="min-width:112px">合计我方</th><th style="min-width:136px">水费单号</th><th style="min-width:200px">帐单周期</th><th style="min-width:104px">总水费</th><th style="min-width:88px">状态</th><th style="min-width:220px">备注</th><th style="min-width:44px"></th></tr></thead><tbody>`;
+  let html = `<thead><tr><th style="min-width:86px">月份</th><th style="min-width:152px">缴费日期</th><th style="min-width:112px">我方缴费</th><th style="background:#fff7e6;min-width:124px">额外承担</th><th style="min-width:124px">合计我方</th><th style="min-width:136px">水费单号</th><th style="min-width:200px">帐单周期</th><th style="min-width:124px">总水费</th><th style="min-width:88px">状态</th><th style="min-width:220px">备注</th><th style="min-width:44px"></th></tr></thead><tbody>`;
   if (!u.waterPayments.length) {
     html += `<tr><td colspan="11" style="text-align:center;color:#94a3b8;padding:20px">暂无水费记录，点右上角「+ 添加水费记录」</td></tr>`;
   }
@@ -1640,6 +1658,7 @@ function updateWaterPay(id, field, value) {
   } else {
     w[field] = value;
   }
+  syncAutoExpensesToMonths();
   saveData();
   updateWaterTotals();
 }
@@ -1707,6 +1726,7 @@ function confirmAddWater() {
     note: document.getElementById('wp_note').value.trim(),
     extraAmount: parseFloat(document.getElementById('wp_extraAmount').value) || 0
   });
+  syncAutoExpensesToMonths();
   saveData();
   document.querySelector('.modal-overlay').remove();
   renderWaterPayTable();
@@ -1717,6 +1737,7 @@ function deleteWaterPay(id) {
   const u = getUtilities();
   if (!confirm('确认删除这条水费记录？')) return;
   u.waterPayments = u.waterPayments.filter(w => w.id !== id);
+  syncAutoExpensesToMonths();
   saveData();
   renderWaterPayTable();
   showToast('已删除');
@@ -1738,6 +1759,7 @@ function importUtilitiesFile(event) {
         waterPayments: d.waterPayments || [],
         nextId: d.nextId || { electric: 1, water: 1 }
       };
+      syncAutoExpensesToMonths();
       saveData();
       renderUtilities();
       showToast('水电费明细已导入，记得保存到云端');
@@ -2124,8 +2146,8 @@ function saveTuition() {
     recs.push({ id: Date.now(), date, student, course, amount, method, account, note });
     showToast('已添加缴费记录，记得保存到云端');
   }
-  saveData();
   syncTuitionToMonths();
+  saveData();
   document.querySelector('.modal-overlay').remove();
   renderTuition();
   renderReport();
@@ -2134,8 +2156,8 @@ function saveTuition() {
 function deleteTuition(id) {
   if (!confirm('确认删除这条缴费记录？')) return;
   db.tuitionRecords = getTuitionRecords().filter(r => r.id !== id);
-  saveData();
   syncTuitionToMonths();
+  saveData();
   renderTuition();
   renderReport();
   showToast('已删除');
@@ -2559,10 +2581,26 @@ function updateNetPayTotals() {
   if (td) td.innerHTML = fmt2(netPayTotal());
 }
 
-// ===================== 明细账本 → 月度支出自动汇总 =====================
-// 菲籍员工工资 → 支出项「团体工资」；房租交款 → 「房租」；网费 → 「网费」（都按日期自动汇总）
+// ===================== 明细账本 → 月度收支自动汇总 =====================
+// 团体工资明细 → 支出「团体工资」；房租交款 → 「房租」；网费明细 → 「网费」
+// 电费明细 → 「电费」（只算我方电表）；水费缴费记录 → 「水费」（我方缴费 + 额外承担）
+// 佛堂收入明细 / 武术费明细 → 收入「佛堂收入」「武术学费」
+// 以上明细行在月度表里只读，录一次明细即可，不用在总表再抄一遍。
 const PAYROLL_ROW = '团体工资';
-const AUTO_EXPENSE_ROWS = [PAYROLL_ROW, '房租', '网费'];
+const WATER_ROW = '水费';
+const ELEC_ROW = '电费';
+const TUITION_ROW = '武术学费';
+const AUTO_EXPENSE_ROWS = [PAYROLL_ROW, '房租', '网费', WATER_ROW, ELEC_ROW];
+const AUTO_INCOME_ROWS = ['佛堂收入', TUITION_ROW]; // 「佛堂收入」即 TEMPLE_ROW，此处用字面量避免常量声明顺序问题
+const AUTO_ROW_TIPS = {
+  '团体工资': '由「团体工资明细」按发放日期自动汇总',
+  '房租': '由「房租交款明细」按所属月份自动汇总',
+  '网费': '由「网费明细」按月份自动汇总',
+  '水费': '由「水费缴费记录」自动汇总（我方缴费 + 额外承担）',
+  '电费': '由「电费明细」自动汇总（只算我方电表）',
+  '佛堂收入': '由「佛堂收入」明细按日期自动汇总',
+  '武术学费': '由「武术费明细」按缴费日期自动汇总'
+};
 const LEGACY_AUTO_ROWS = ['菲籍员工工资'];
 
 function autoUtilities() {
@@ -2646,6 +2684,52 @@ function migrateLegacyAutoExpenses() {
     });
     db.payrollLegacyMigrated = true;
   }
+
+  // 水费 / 电费：原来直接在月度总表里手填，改成自动汇总后把差额补进明细，金额不丢失
+  // 规则：明细合计 < 手填金额时，把差额补成「额外承担」（水费）或记到「历史电费合计」电表（电费）；
+  //       明细合计 >= 手填金额时以明细为准（明细是唯一数据源）。差额不足 1 比索视为四舍五入，不补。
+  if (!db.utilityRowsLegacyMigrated) {
+    if (!u.meters) u.meters = [];
+    if (!u.electricBills) u.electricBills = {};
+    if (!u.waterPayments) u.waterPayments = [];
+    if (!u.nextId) u.nextId = { electric: 1, water: 1 };
+    let elecMeter = u.meters.find(mt => mt.legacyMeter);
+    db.months.forEach(m => {
+      const mon = parseInt(m.label, 10) || 0;
+      if (!mon) return;
+      const label = mon + '月';
+      const waterManual = Number(m.expenses && m.expenses[WATER_ROW]) || 0;
+      const elecManual = Number(m.expenses && m.expenses[ELEC_ROW]) || 0;
+      const waterRecs = u.waterPayments.filter(w => Number(w.month) === mon);
+      const waterSum = waterRecs.reduce((a, w) => a + (Number(w.amount) || 0) + (Number(w.extraAmount) || 0), 0);
+      const elecSum = u.meters.filter(mt => (mt.owner || '我方') === '我方' && !mt.legacyMeter)
+        .reduce((a, mt) => a + (Number(((u.electricBills[mt.accountNo] || {})[label]) || 0)), 0);
+
+      if (waterManual > waterSum + 1) {
+        const diff = waterManual - waterSum;
+        if (waterRecs.length) {
+          const target = waterRecs[0];
+          target.extraAmount = (Number(target.extraAmount) || 0) + diff;
+          target.legacyExtra = true;
+        } else {
+          u.waterPayments.push({
+            id: u.nextId.water++, month: mon, payDate: '', amount: waterManual, extraAmount: 0,
+            totalAmount: 0, billNo: '', billPeriod: '', status: 'paid',
+            note: '历史数据（原手动录入）', legacy: true
+          });
+        }
+      }
+      if (elecManual > elecSum + 1) {
+        if (!elecMeter) {
+          elecMeter = { id: Date.now() + 1, accountNo: '历史电费合计', meterNo: '—', unit: '—', name: '', owner: '我方', legacyMeter: true };
+          u.meters.push(elecMeter);
+        }
+        if (!u.electricBills[elecMeter.accountNo]) u.electricBills[elecMeter.accountNo] = {};
+        u.electricBills[elecMeter.accountNo][label] = (Number(u.electricBills[elecMeter.accountNo][label]) || 0) + (elecManual - elecSum);
+      }
+    });
+    db.utilityRowsLegacyMigrated = true;
+  }
 }
 
 function syncAutoExpensesToMonths() {
@@ -2671,6 +2755,18 @@ function syncAutoExpensesToMonths() {
   u.netPayments.forEach(n => {
     const mon = Number(n.month) || 0;
     if (mon) addTo(mon + '月', NET, n.amount);
+  });
+  // 电费：只汇总「我方」电表，素斋馆电表只在明细里作参考
+  (u.meters || []).forEach(mt => {
+    if ((mt.owner || '我方') !== '我方') return;
+    const bills = (u.electricBills || {})[mt.accountNo] || {};
+    Object.keys(bills).forEach(label => addTo(label, ELEC_ROW, bills[label]));
+  });
+  // 水费：我方缴费 + 额外承担
+  (u.waterPayments || []).forEach(w => {
+    const mon = Number(w.month) || 0;
+    if (!mon) return;
+    addTo(mon + '月', WATER_ROW, (Number(w.amount) || 0) + (Number(w.extraAmount) || 0));
   });
 }
 
@@ -2739,11 +2835,45 @@ function syncTempleToMonths() {
   });
 }
 
-// 载入数据后统一走一遍：迁移旧功德箱 → 收入项归一为「佛堂收入」→ 按月汇总
+// 历史上「武术学费」是按月手填的，改成自动后一次性转成缴费记录，金额不变
+function migrateLegacyTuition() {
+  if (db.tuitionLegacyMigrated) return;
+  if (!db.months) db.months = [];
+  if (!db.tuitionRecords) db.tuitionRecords = [];
+  const year = Number(db.year) || new Date().getFullYear();
+  const taken = {};
+  db.tuitionRecords.forEach(r => {
+    const l = getMonthLabelFromDate(r.date);
+    if (l) taken[l] = true;
+  });
+  let seq = 0;
+  db.months.forEach(m => {
+    const v = Number(m.income && m.income[TUITION_ROW]) || 0;
+    if (v <= 0 || taken[m.label]) return;
+    const mon = String(parseInt(m.label, 10) || 1).padStart(2, '0');
+    db.tuitionRecords.push({
+      id: Date.now() + (seq++),
+      date: year + '-' + mon + '-01',
+      student: '（原手动录入学费）',
+      course: '',
+      amount: v,
+      method: '其他',
+      account: '',
+      note: '历史数据（原手动录入）',
+      legacy: true
+    });
+    taken[m.label] = true;
+  });
+  db.tuitionLegacyMigrated = true;
+}
+
+// 载入数据后统一走一遍：迁移旧功德箱/旧学费 → 收入项归一 → 按月汇总
 function templeBootstrap() {
   migrateLegacyGongdexiang();
+  migrateLegacyTuition();
   ensureTempleIncomeCats();
   syncTempleToMonths();
+  syncTuitionToMonths();
   autoExpensesBootstrap();
 }
 
