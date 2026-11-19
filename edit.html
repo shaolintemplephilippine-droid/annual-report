@@ -100,10 +100,16 @@
   .edit-table.matrix-frozen .fm-edge::before { content: ''; position: absolute; top: 0; bottom: 0; right: -9px; width: 9px; background: linear-gradient(to right, rgba(15,23,42,0.15), rgba(15,23,42,0)); pointer-events: none; }
 
   /* 电费明细：月份金额框加宽，保证小数位完整可见 */
-  .edit-table.matrix-frozen .col-month-header { min-width: 104px; }
-  .edit-table.matrix-frozen td input[type="number"] { min-width: 80px; padding-left: 6px; padding-right: 6px; -moz-appearance: textfield; appearance: textfield; }
+  .edit-table.matrix-frozen .col-month-header { min-width: 112px; }
+  .edit-table.matrix-frozen td input[type="number"] { min-width: 88px; padding-left: 6px; padding-right: 6px; -moz-appearance: textfield; appearance: textfield; }
   .edit-table.matrix-frozen td input[type="number"]::-webkit-outer-spin-button,
   .edit-table.matrix-frozen td input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+  /* 数据录入表（#editTable）：月份金额框同样加宽，金额小数位完整可见 */
+  #editTable .col-month-header { min-width: 112px; }
+  #editTable td input[type="number"] { min-width: 88px; padding-left: 6px; padding-right: 6px; -moz-appearance: textfield; appearance: textfield; }
+  #editTable td input[type="number"]::-webkit-outer-spin-button,
+  #editTable td input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
   /* Utilities bright styles */
   .util-tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
